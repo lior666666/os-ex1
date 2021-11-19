@@ -20,6 +20,8 @@ using namespace std;
 #define FUNC_EXIT()
 #endif
 
+#define WHITESPACE " "
+
 string _ltrim(const std::string& s)
 {
   size_t start = s.find_first_not_of(WHITESPACE);
