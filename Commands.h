@@ -7,7 +7,8 @@
 #define COMMAND_MAX_ARGS (20)
 
 class Command {
-// TODO: Add your data members
+ protected:
+    const char* cmd_line;
  public:
   Command(const char* cmd_line);
   virtual ~Command();
@@ -142,10 +143,12 @@ class HeadCommand : public BuiltInCommand {
 
 class SmallShell {
  private:
-  // TODO: Add your data members
+    const char* prompt;
   SmallShell();
  public:
   Command *CreateCommand(const char* cmd_line);
+  const char* getPrompt();
+  void setPrompt(const char* prompt);
   SmallShell(SmallShell const&)      = delete; // disable copy ctor
   void operator=(SmallShell const&)  = delete; // disable = operator
   static SmallShell& getInstance() // make SmallShell singleton
@@ -157,6 +160,14 @@ class SmallShell {
   ~SmallShell();
   void executeCommand(const char* cmd_line);
   // TODO: add extra methods as needed
+};
+
+class ChangePromptCommand : public BuiltInCommand {
+    SmallShell* smash;
+public:
+    ChangePromptCommand(const char* cmd_line, SmallShell* smash);
+    virtual ~ChangePromptCommand() {}
+    void execute() override;
 };
 
 #endif //SMASH_COMMAND_H_

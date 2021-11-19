@@ -20,7 +20,7 @@ using namespace std;
 #define FUNC_EXIT()
 #endif
 
-#define WHITESPACE " "
+const std::string WHITESPACE = " \n\r\t\f\v";
 
 string _ltrim(const std::string& s)
 {
@@ -79,8 +79,27 @@ void _removeBackgroundSign(char* cmd_line) {
 
 // TODO: Add your implementation for classes in Commands.h 
 
-SmallShell::SmallShell() {
-// TODO: add your implementation
+Command::Command(const char* cmd_line) : cmd_line(cmd_line) {}
+Command::~Command() {}
+BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
+ChangePromptCommand::ChangePromptCommand(const char* cmd_line, SmallShell* smash) : BuiltInCommand(cmd_line), smash(smash){}
+
+SmallShell::SmallShell() : prompt("smash") {}
+const char* SmallShell::getPrompt(){
+    return this->prompt;
+}
+void SmallShell::setPrompt(const char* prompt){
+    this->prompt = prompt;
+}
+
+
+void ChangePromptCommand::execute() {
+    char* args[21];
+    int length = _parseCommandLine(cmd_line, args);
+    if (length == 1)
+        smash->setPrompt("smash");
+    else
+        smash->setPrompt(args[1]);
 }
 
 SmallShell::~SmallShell() {
@@ -91,6 +110,12 @@ SmallShell::~SmallShell() {
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
 Command * SmallShell::CreateCommand(const char* cmd_line) {
+    string cmd_s = _trim(string(cmd_line));
+    string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
+
+    if (firstWord.compare("chprompt") == 0) {
+        return new ChangePromptCommand(cmd_line, this);
+    }
 	// For example:
 /*
   string cmd_s = _trim(string(cmd_line));
@@ -112,9 +137,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
-  // TODO: Add your implementation here
-  // for example:
-  // Command* cmd = CreateCommand(cmd_line);
-  // cmd->execute();
+  Command* cmd = CreateCommand(cmd_line);
+  cmd->execute();
   // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
