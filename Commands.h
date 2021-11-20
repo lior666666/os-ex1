@@ -9,6 +9,8 @@
 class Command {
  protected:
     const char* cmd_line;
+    char* args[21];
+    int args_length;
  public:
   Command(const char* cmd_line);
   virtual ~Command();

@@ -74,15 +74,34 @@ void _removeBackgroundSign(char* cmd_line) {
   // replace the & (background sign) with space and then remove all tailing spaces.
   cmd_line[idx] = ' ';
   // truncate the command line string up to the last non-space character
-  cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
+  cmd_line[str.find_last_not_of(WHITESPACE, idx)] = 0;
 }
 
 // TODO: Add your implementation for classes in Commands.h 
 
-Command::Command(const char* cmd_line) : cmd_line(cmd_line) {}
-Command::~Command() {}
+Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
+    this->args_length = _parseCommandLine(cmd_line, this->args);
+    _removeBackgroundSign(this->args[this->args_length-1]);
+}
+Command::~Command() {
+    for(int i = 0; i < this->args_length; i++) {
+        free(this->args[i]);
+    }
+}
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
-ChangePromptCommand::ChangePromptCommand(const char* cmd_line, SmallShell* smash) : BuiltInCommand(cmd_line), smash(smash){}
+ChangePromptCommand::ChangePromptCommand(const char* cmd_line, SmallShell* smash) : BuiltInCommand(cmd_line), smash(smash) {}
+void ChangePromptCommand::execute() {
+    if (args_length == 1)
+        smash->setPrompt("smash");
+    else
+        smash->setPrompt(args[1]);
+}
+GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
+void GetCurrDirCommand::execute() {
+    char* curr_dir = getcwd(NULL, 0);
+    std::cout << curr_dir << endl;
+    free(curr_dir);
+}
 
 SmallShell::SmallShell() : prompt("smash") {}
 const char* SmallShell::getPrompt(){
@@ -91,17 +110,6 @@ const char* SmallShell::getPrompt(){
 void SmallShell::setPrompt(const char* prompt){
     this->prompt = prompt;
 }
-
-
-void ChangePromptCommand::execute() {
-    char* args[21];
-    int length = _parseCommandLine(cmd_line, args);
-    if (length == 1)
-        smash->setPrompt("smash");
-    else
-        smash->setPrompt(args[1]);
-}
-
 SmallShell::~SmallShell() {
 // TODO: add your implementation
 }
@@ -115,6 +123,9 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
 
     if (firstWord.compare("chprompt") == 0) {
         return new ChangePromptCommand(cmd_line, this);
+    }
+    else if (firstWord.compare("pwd") == 0) {
+        return new GetCurrDirCommand(cmd_line);
     }
 	// For example:
 /*
