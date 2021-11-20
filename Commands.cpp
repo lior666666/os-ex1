@@ -2,6 +2,7 @@
 #include <string.h>
 #include <iostream>
 #include <vector>
+#include <time.h>
 #include <sstream>
 #include <sys/wait.h>
 #include <iomanip>
@@ -77,8 +78,7 @@ void _removeBackgroundSign(char* cmd_line) {
   cmd_line[str.find_last_not_of(WHITESPACE, idx)] = 0;
 }
 
-// TODO: Add your implementation for classes in Commands.h 
-
+// <---------- START Command ------------>
 Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
     this->args_length = _parseCommandLine(cmd_line, this->args);
     _removeBackgroundSign(this->args[this->args_length-1]);
@@ -88,7 +88,16 @@ Command::~Command() {
         free(this->args[i]);
     }
 }
+const char* Command::getCmdLine() {
+    return this->cmd_line;
+}
+// <---------- END Command ------------>
+
+// <---------- START BuiltInCommand ------------>
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
+// <---------- END BuiltInCommand ------------>
+
+// <---------- START ChangePromptCommand ------------>
 ChangePromptCommand::ChangePromptCommand(const char* cmd_line, SmallShell* smash) : BuiltInCommand(cmd_line), smash(smash) {}
 void ChangePromptCommand::execute() {
     if (args_length == 1)
@@ -96,13 +105,81 @@ void ChangePromptCommand::execute() {
     else
         smash->setPrompt(args[1]);
 }
+// <---------- END ChangePromptCommand ------------>
+
+// <---------- START GetCurrDirCommand ------------>
 GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
 void GetCurrDirCommand::execute() {
     char* curr_dir = getcwd(NULL, 0);
     std::cout << curr_dir << endl;
     free(curr_dir);
 }
+// <---------- END GetCurrDirCommand ------------>
 
+// <---------- START JobsCommand ------------>
+JobsCommand::JobsCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
+void JobsCommand::execute() {
+    jobs->removeFinishedJobs();
+    jobs->printJobsList();
+}
+// <---------- END JobsCommand ------------>
+
+// <---------- START JobEntry ------------>
+JobEntry::JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped) :
+        job_id(job_id), cmd_line(cmd_line), process_id(process_id), time_inserted(time_inserted), isStopped(isStopped) {}
+JobEntry::~JobEntry() {}
+void JobEntry::printJob() {
+    if (this->isStopped) {
+        std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
+            this->process_id << " " << difftime(this->time_inserted, time(NULL)) << " (stopped)" << endl;
+    }
+    else {
+        std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
+            this->process_id << " " << difftime(this->time_inserted, time(NULL)) << endl;
+    }
+}
+pid_t JobEntry::getProcessID() {
+    return this->process_id;
+}
+// <---------- END JobEntry ------------>
+
+// <---------- START JobsList ------------>
+JobsList::JobsList() {
+    jobs_vec = new std::vector<JobEntry>;
+    max_job_id = 0;
+    msx_stopped_jod_id = 0;
+}
+JobsList::~JobsList() {
+    delete jobs_vec;
+}
+void JobsList::addJob(Command* cmd, bool isStopped) {
+    JobEntry* job = new JobEntry(max_job_id++, cmd->getCmdLine(), getpid(), time(NULL), isStopped);
+    jobs_vec->push_back(*job);
+}
+void JobsList::printJobsList() {
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it < jobs_vec->end(); it++) {
+        it->printJob();
+    }
+}
+void JobsList::removeFinishedJobs() {
+    pid_t kidpid;
+    int status;
+    while((kidpid = waitpid(-1, &status, WNOHANG)) > 0)
+        this->removeJobById(kidpid);
+}
+void JobsList::removeJobById(pid_t process_to_delete) {
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it < jobs_vec->end(); it++) {
+        if(it->getProcessID() == process_to_delete) {
+            jobs_vec->erase(it);
+            break;
+        }
+    }
+}
+// <---------- END JobsList ------------>
+
+// <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash") {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -110,9 +187,10 @@ const char* SmallShell::getPrompt(){
 void SmallShell::setPrompt(const char* prompt){
     this->prompt = prompt;
 }
-SmallShell::~SmallShell() {
-// TODO: add your implementation
-}
+SmallShell::~SmallShell() {}
+// <---------- END SmallShell ------------>
+
+
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
@@ -126,6 +204,9 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     }
     else if (firstWord.compare("pwd") == 0) {
         return new GetCurrDirCommand(cmd_line);
+    }
+    else if (firstWord.compare("jobs") == 0) {
+        return new JobsCommand(cmd_line, &jobs_list);
     }
 	// For example:
 /*

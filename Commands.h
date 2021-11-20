@@ -13,6 +13,7 @@ class Command {
     int args_length;
  public:
   Command(const char* cmd_line);
+  const char* getCmdLine();
   virtual ~Command();
   virtual void execute() = 0;
   //virtual void prepare();
@@ -80,15 +81,23 @@ class QuitCommand : public BuiltInCommand {
   void execute() override;
 };
 
-
-
+class JobEntry {
+    int job_id;
+    const char* cmd_line;
+    pid_t process_id;
+    time_t time_inserted;
+    bool isStopped;
+ public:
+    JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped);
+    ~JobEntry();
+    void printJob();
+    pid_t getProcessID();
+};
 
 class JobsList {
- public:
-  class JobEntry {
-   // TODO: Add your data members
-  };
- // TODO: Add your data members
+    std::vector<JobEntry>* jobs_vec;
+    int max_job_id;
+    int msx_stopped_jod_id;
  public:
   JobsList();
   ~JobsList();
@@ -104,7 +113,7 @@ class JobsList {
 };
 
 class JobsCommand : public BuiltInCommand {
- // TODO: Add your data members
+    JobsList* jobs;
  public:
   JobsCommand(const char* cmd_line, JobsList* jobs);
   virtual ~JobsCommand() {}
@@ -145,6 +154,7 @@ class HeadCommand : public BuiltInCommand {
 
 class SmallShell {
  private:
+    JobsList jobs_list;
     const char* prompt;
   SmallShell();
  public:
