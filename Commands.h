@@ -1,15 +1,16 @@
 #ifndef SMASH_COMMAND_H_
 #define SMASH_COMMAND_H_
 
+#include <string.h>
 #include <vector>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
-#define COMMAND_MAX_ARGS (20)
+#define COMMAND_MAX_ARGS (21)
 
 class Command {
  protected:
     const char* cmd_line;
-    char* args[21];
+    char* args[COMMAND_MAX_ARGS];
     int args_length;
  public:
   Command(const char* cmd_line);
@@ -52,11 +53,21 @@ class RedirectionCommand : public Command {
   //void cleanup() override;
 };
 
+class SmallShell;
+class ChangePromptCommand : public BuiltInCommand {
+    SmallShell* smash;
+public:
+    ChangePromptCommand(const char* cmd_line, SmallShell* smash);
+    virtual ~ChangePromptCommand() {}
+    void execute() override;
+};
+
 class ChangeDirCommand : public BuiltInCommand {
-// TODO: Add your data members public:
-  ChangeDirCommand(const char* cmd_line, char** plastPwd);
-  virtual ~ChangeDirCommand() {}
-  void execute() override;
+    SmallShell* smash;
+ public:
+    ChangeDirCommand(const char* cmd_line, SmallShell* smash);
+    virtual ~ChangeDirCommand() {}
+    void execute() override;
 };
 
 class GetCurrDirCommand : public BuiltInCommand {
@@ -91,13 +102,15 @@ class JobEntry {
     JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped);
     ~JobEntry();
     void printJob();
+    int getJobID();
     pid_t getProcessID();
+    bool isStoppedProcess();
 };
 
 class JobsList {
     std::vector<JobEntry>* jobs_vec;
     int max_job_id;
-    int msx_stopped_jod_id;
+    int max_stopped_jod_id;
  public:
   JobsList();
   ~JobsList();
@@ -105,11 +118,9 @@ class JobsList {
   void printJobsList();
   void killAllJobs();
   void removeFinishedJobs();
-  JobEntry * getJobById(int jobId);
+  JobEntry* getJobById(int jobId);
   void removeJobById(int jobId);
-  JobEntry * getLastJob(int* lastJobId);
-  JobEntry *getLastStoppedJob(int *jobId);
-  // TODO: Add extra methods or modify exisitng ones as needed
+  JobEntry* getLastStoppedJob();
 };
 
 class JobsCommand : public BuiltInCommand {
@@ -156,11 +167,14 @@ class SmallShell {
  private:
     JobsList jobs_list;
     const char* prompt;
+    char** last_pwd;
   SmallShell();
  public:
   Command *CreateCommand(const char* cmd_line);
   const char* getPrompt();
+  char** getLastPwd();
   void setPrompt(const char* prompt);
+  void setLastPwd(char** last_pwd);
   SmallShell(SmallShell const&)      = delete; // disable copy ctor
   void operator=(SmallShell const&)  = delete; // disable = operator
   static SmallShell& getInstance() // make SmallShell singleton
@@ -172,14 +186,6 @@ class SmallShell {
   ~SmallShell();
   void executeCommand(const char* cmd_line);
   // TODO: add extra methods as needed
-};
-
-class ChangePromptCommand : public BuiltInCommand {
-    SmallShell* smash;
-public:
-    ChangePromptCommand(const char* cmd_line, SmallShell* smash);
-    virtual ~ChangePromptCommand() {}
-    void execute() override;
 };
 
 #endif //SMASH_COMMAND_H_

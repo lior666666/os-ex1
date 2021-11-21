@@ -107,6 +107,13 @@ void ChangePromptCommand::execute() {
 }
 // <---------- END ChangePromptCommand ------------>
 
+// <---------- START ShowPidCommand ------------>
+ShowPidCommand::ShowPidCommand(const char* cmd_line): BuiltInCommand(cmd_line) {}
+void ShowPidCommand::execute(){
+    std::cout << "smash pid is " << getpid() << endl;  // need to check if that is the proper way.
+}
+// <---------- END ShowPidCommand ------------>
+
 // <---------- START GetCurrDirCommand ------------>
 GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
 void GetCurrDirCommand::execute() {
@@ -115,6 +122,53 @@ void GetCurrDirCommand::execute() {
     free(curr_dir);
 }
 // <---------- END GetCurrDirCommand ------------>
+
+// <---------- START ChangeDirCommand ------------>
+ChangeDirCommand::ChangeDirCommand(const char* cmd_line, SmallShell* smash);: BuiltInCommand(cmd_line), smash(smash) {}
+void ChangeDirCommand:: execute(){
+    if(args_length > 2){
+        std::cerr << "smash error: cd: too many arguments" << endl;
+    }
+    else if(length == 2){
+        char sign[] = "-";
+        if(strcmp(args[1], sign) == 0){
+            if(*(this->last_pwd) == NULL){
+                std::cerr << "smash error: cd: OLDPWD not set" << endl;
+            }
+            else{
+                char* copy_last_pwd = (char*) malloc(strlen(*last_pwd) + 1);
+                strcpy(copy_last_pwd, *last_pwd);
+                free(*last_pwd);
+                *this->last_pwd = getcwd(NULL, 0);
+                if(chdir(copy_last_pwd) == -1){
+                    perror("smash error: chdir failed");
+                    free(*last_pwd);
+                    *this->last_pwd = getcwd(NULL, 0);
+                }
+                else{
+                    std::cout << copy_last_pwd << "\n";
+//                    free(*last_pwd);
+//                    this->last_pwd = &prev_location;
+//                    std::cout << *this->last_pwd << "\n";
+                }
+                free(copy_last_pwd);
+            }
+        }
+        else{
+            free(*last_pwd);
+            *this->last_pwd = getcwd(NULL, 0);
+            if (chdir(args[1]) == -1){
+                perror("smash error: chdir failed");
+                free(*last_pwd);
+                *this->last_pwd = getcwd(NULL, 0);
+            }
+            else{
+                std::cout << args[1] << "\n";
+            }
+        }
+    }
+}
+// <---------- END ChangeDirCommand ------------>
 
 // <---------- START JobsCommand ------------>
 JobsCommand::JobsCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
@@ -141,13 +195,19 @@ void JobEntry::printJob() {
 pid_t JobEntry::getProcessID() {
     return this->process_id;
 }
+int JobEntry::getJobID() {
+    return this->job_id;
+}
+bool JobEntry::isStoppedProcess() {
+    return this->isStopped;
+}
 // <---------- END JobEntry ------------>
 
 // <---------- START JobsList ------------>
 JobsList::JobsList() {
     jobs_vec = new std::vector<JobEntry>;
     max_job_id = 0;
-    msx_stopped_jod_id = 0;
+    max_stopped_jod_id = 0;
 }
 JobsList::~JobsList() {
     delete jobs_vec;
@@ -158,7 +218,7 @@ void JobsList::addJob(Command* cmd, bool isStopped) {
 }
 void JobsList::printJobsList() {
     vector<JobEntry>::iterator it;
-    for(it = jobs_vec->begin(); it < jobs_vec->end(); it++) {
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
         it->printJob();
     }
 }
@@ -167,15 +227,35 @@ void JobsList::removeFinishedJobs() {
     int status;
     while((kidpid = waitpid(-1, &status, WNOHANG)) > 0)
         this->removeJobById(kidpid);
+    max_job_id = jobs_vec->back().getJobID(); // back() is the last element in the vec
+    JobEntry* last_stopped = getLastStoppedJob();
+    if (last_stopped) // if there is stopped job in the vec
+        max_stopped_jod_id = last_stopped->getJobID();
+    else
+        max_stopped_jod_id = 0;
+}
+JobEntry* JobsList::getJobById(int jobId) {
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++)
+        if(it->getJobID() == jobId)
+            return &(*it);
+    return NULL;
 }
 void JobsList::removeJobById(pid_t process_to_delete) {
     vector<JobEntry>::iterator it;
-    for(it = jobs_vec->begin(); it < jobs_vec->end(); it++) {
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
         if(it->getProcessID() == process_to_delete) {
             jobs_vec->erase(it);
             break;
         }
     }
+}
+JobEntry* JobsList::getLastStoppedJob() {
+    vector<JobEntry>::reverse_iterator it;
+    for(it = jobs_vec->rbegin(); it != jobs_vec->rend(); it++) // reverse loop!!
+        if(it->isStoppedProcess())
+            return &(*it);
+    return NULL;
 }
 // <---------- END JobsList ------------>
 
@@ -202,8 +282,14 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     if (firstWord.compare("chprompt") == 0) {
         return new ChangePromptCommand(cmd_line, this);
     }
+    else if (firstWord.compare("showpid") == 0) {
+        return new ShowPidCommand(cmd_line);
+    }
     else if (firstWord.compare("pwd") == 0) {
         return new GetCurrDirCommand(cmd_line);
+    }
+    else if (firstWord.compare("cd") == 0) {
+        return new ChangeDirCommand(cmd_line, this);
     }
     else if (firstWord.compare("jobs") == 0) {
         return new JobsCommand(cmd_line, &jobs_list);
