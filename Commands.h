@@ -118,6 +118,8 @@ class JobsList {
   void printJobsList();
   void killAllJobs();
   void removeFinishedJobs();
+  void updateMaxJobID();
+  void updateMaxStoppedJobID();
   JobEntry* getJobById(int jobId);
   void removeJobById(int jobId);
   JobEntry* getLastStoppedJob();

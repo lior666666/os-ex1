@@ -124,6 +124,7 @@ void GetCurrDirCommand::execute() {
 // <---------- END GetCurrDirCommand ------------>
 
 // <---------- START ChangeDirCommand ------------>
+/*
 ChangeDirCommand::ChangeDirCommand(const char* cmd_line, SmallShell* smash);: BuiltInCommand(cmd_line), smash(smash) {}
 void ChangeDirCommand:: execute(){
     if(args_length > 2){
@@ -167,7 +168,7 @@ void ChangeDirCommand:: execute(){
             }
         }
     }
-}
+}*/
 // <---------- END ChangeDirCommand ------------>
 
 // <---------- START JobsCommand ------------>
@@ -227,12 +228,22 @@ void JobsList::removeFinishedJobs() {
     int status;
     while((kidpid = waitpid(-1, &status, WNOHANG)) > 0)
         this->removeJobById(kidpid);
-    max_job_id = jobs_vec->back().getJobID(); // back() is the last element in the vec
-    JobEntry* last_stopped = getLastStoppedJob();
-    if (last_stopped) // if there is stopped job in the vec
-        max_stopped_jod_id = last_stopped->getJobID();
-    else
-        max_stopped_jod_id = 0;
+    // need to do the rows below after every change in the vec
+    updateMaxJobID();
+    updateMaxStoppedJobID();
+}
+void JobsList::updateMaxJobID() {
+    if (jobs_vec->size() != 0)
+        max_job_id = jobs_vec->back().getJobID(); // back() is the last element in the vec
+}
+void JobsList::updateMaxStoppedJobID() {
+    if (jobs_vec->size() != 0){
+        JobEntry* last_stopped = getLastStoppedJob();
+        if (last_stopped) // if there is stopped job in the vec
+            max_stopped_jod_id = last_stopped->getJobID();
+        else
+            max_stopped_jod_id = 0;
+    }
 }
 JobEntry* JobsList::getJobById(int jobId) {
     vector<JobEntry>::iterator it;
@@ -288,9 +299,9 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     else if (firstWord.compare("pwd") == 0) {
         return new GetCurrDirCommand(cmd_line);
     }
-    else if (firstWord.compare("cd") == 0) {
-        return new ChangeDirCommand(cmd_line, this);
-    }
+    //else if (firstWord.compare("cd") == 0) {
+    //    return new ChangeDirCommand(cmd_line, this);
+    //}
     else if (firstWord.compare("jobs") == 0) {
         return new JobsCommand(cmd_line, &jobs_list);
     }
