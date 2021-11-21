@@ -9,6 +9,8 @@
 class Command {
  protected:
     const char* cmd_line;
+    char* args[COMMAND_MAX_ARGS];
+    int args_length;
  public:
   Command(const char* cmd_line);
   virtual ~Command();
@@ -48,14 +50,23 @@ class RedirectionCommand : public Command {
   //void prepare() override;
   //void cleanup() override;
 };
+class SmallShell;
+class ChangePromptCommand : public BuiltInCommand {
+    SmallShell* smash;
+public:
+    ChangePromptCommand(const char* cmd_line, SmallShell* smash);
+    virtual ~ChangePromptCommand() {}
+    void execute() override;
+};
 
 class ChangeDirCommand : public BuiltInCommand {
 // TODO: Add your data members public:
+private:
   char** last_pwd;
+public:
   ChangeDirCommand(const char* cmd_line, char** plastPwd);
   virtual ~ChangeDirCommand() {}
   void execute() override;
-  friend  class SmallShell;
 };
 
 class GetCurrDirCommand : public BuiltInCommand {
@@ -163,16 +174,10 @@ class SmallShell {
   }
   ~SmallShell();
   void executeCommand(const char* cmd_line);
-  char* getLastPwd();
+  char** getLastPwd();
   // TODO: add extra methods as needed
 };
 
-class ChangePromptCommand : public BuiltInCommand {
-    SmallShell* smash;
-public:
-    ChangePromptCommand(const char* cmd_line, SmallShell* smash);
-    virtual ~ChangePromptCommand() {}
-    void execute() override;
-};
+
 
 #endif //SMASH_COMMAND_H_

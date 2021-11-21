@@ -109,6 +109,10 @@ void ShowPidCommand :: execute(){
     std::cout << "smash pid is " << getpid()<< "\n";  // need to check if that is the proper way.
 }
 
+char** SmallShell:: getLastPwd(){
+    return last_pwd;
+}
+
 //4
 void ChangeDirCommand:: execute(){
     char* args[COMMAND_MAX_ARGS];
@@ -180,7 +184,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
 //        strcpy(temp_last_pwd, last_pwd);
 
 //        char* temp_last_pwd = last_pwd.c_str()
-            return new ChangeDirCommand(cmd_line, last_pwd);
+            return new ChangeDirCommand(cmd_line, getLastPwd());
         }
 
 //        free(temp_last_pwd);
