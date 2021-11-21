@@ -118,7 +118,7 @@ void ChangeDirCommand:: execute(){
     char* args[COMMAND_MAX_ARGS];
     int length = _parseCommandLine(cmd_line, args);
     if(length>2){
-        std::cerr << "smash error: cd: too many arguments \n";
+        std::cerr << "smash error: cd: too many arguments" << endl;
     }
     else if(length == 2){
         char sign[] = "-";
