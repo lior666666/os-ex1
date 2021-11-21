@@ -1,10 +1,10 @@
 #ifndef SMASH_COMMAND_H_
 #define SMASH_COMMAND_H_
-
+#include <string.h>
 #include <vector>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
-#define COMMAND_MAX_ARGS (20)
+#define COMMAND_MAX_ARGS (21)
 
 class Command {
  protected:
@@ -51,9 +51,11 @@ class RedirectionCommand : public Command {
 
 class ChangeDirCommand : public BuiltInCommand {
 // TODO: Add your data members public:
+  char** last_pwd;
   ChangeDirCommand(const char* cmd_line, char** plastPwd);
   virtual ~ChangeDirCommand() {}
   void execute() override;
+  friend  class SmallShell;
 };
 
 class GetCurrDirCommand : public BuiltInCommand {
@@ -144,8 +146,10 @@ class HeadCommand : public BuiltInCommand {
 class SmallShell {
  private:
     const char* prompt;
+
   SmallShell();
  public:
+    char** last_pwd;
   Command *CreateCommand(const char* cmd_line);
   const char* getPrompt();
   void setPrompt(const char* prompt);
@@ -159,6 +163,7 @@ class SmallShell {
   }
   ~SmallShell();
   void executeCommand(const char* cmd_line);
+  char* getLastPwd();
   // TODO: add extra methods as needed
 };
 

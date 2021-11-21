@@ -83,23 +83,79 @@ Command::Command(const char* cmd_line) : cmd_line(cmd_line) {}
 Command::~Command() {}
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
 ChangePromptCommand::ChangePromptCommand(const char* cmd_line, SmallShell* smash) : BuiltInCommand(cmd_line), smash(smash){}
-
-SmallShell::SmallShell() : prompt("smash") {}
+ShowPidCommand::ShowPidCommand(const char* cmd_line): BuiltInCommand(cmd_line){}
+ChangeDirCommand:: ChangeDirCommand(const char* cmd_line, char** last_pwd): BuiltInCommand(cmd_line), last_pwd(last_pwd){}
+SmallShell::SmallShell() : prompt("smash"){
+    char* emp = NULL;
+    last_pwd = &emp;
+}
 const char* SmallShell::getPrompt(){
     return this->prompt;
 }
 void SmallShell::setPrompt(const char* prompt){
     this->prompt = prompt;
 }
-
-
+// 1
 void ChangePromptCommand::execute() {
-    char* args[21];
+    char* args[COMMAND_MAX_ARGS];
     int length = _parseCommandLine(cmd_line, args);
     if (length == 1)
         smash->setPrompt("smash");
     else
         smash->setPrompt(args[1]);
+}
+//2
+void ShowPidCommand :: execute(){
+    std::cout << "smash pid is " << getpid()<< "\n";  // need to check if that is the proper way.
+}
+
+//4
+void ChangeDirCommand:: execute(){
+    char* args[COMMAND_MAX_ARGS];
+    int length = _parseCommandLine(cmd_line, args);
+    if(length>2){
+        std::cerr << "smash error: cd: too many arguments \n";
+    }
+    else if(length == 2){
+        char sign[] = "-";
+        if(strcmp(args[1], sign) == 0){
+            if(*(this->last_pwd) == NULL){
+                std::cerr << "smash error: cd: OLDPWD not set \n";
+            }
+            else{
+                char* copy_last_pwd = (char*) malloc(strlen(*last_pwd) + 1);
+                strcpy(copy_last_pwd, *last_pwd);
+                free(*last_pwd);
+                *this->last_pwd = getcwd(NULL, 0);
+                if(chdir(copy_last_pwd) == -1){
+                    perror("smash error: chdir failed");
+                    free(*last_pwd);
+                    *this->last_pwd = getcwd(NULL, 0);
+                }
+                else{
+                      std::cout << copy_last_pwd << "\n";
+//                    free(*last_pwd);
+//                    this->last_pwd = &prev_location;
+//                    std::cout << *this->last_pwd << "\n";
+                }
+                free(copy_last_pwd);
+            }
+        }
+        else{
+            free(*last_pwd);
+            *this->last_pwd = getcwd(NULL, 0);
+            if (chdir(args[1]) == -1){
+                perror("smash error: chdir failed");
+                free(*last_pwd);
+                *this->last_pwd = getcwd(NULL, 0);
+            }
+            else{
+                std::cout << args[1] << "\n";
+            }
+        }
+
+    }
+
 }
 
 SmallShell::~SmallShell() {
@@ -116,6 +172,19 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     if (firstWord.compare("chprompt") == 0) {
         return new ChangePromptCommand(cmd_line, this);
     }
+    else if (firstWord.compare("showpid") == 0) {
+        return new ShowPidCommand(cmd_line);
+    }
+    else if (firstWord.compare("cd") == 0) {
+//        char* temp_last_pwd;
+//        strcpy(temp_last_pwd, last_pwd);
+
+//        char* temp_last_pwd = last_pwd.c_str()
+            return new ChangeDirCommand(cmd_line, last_pwd);
+        }
+
+//        free(temp_last_pwd);
+
 	// For example:
 /*
   string cmd_s = _trim(string(cmd_line));
@@ -140,4 +209,7 @@ void SmallShell::executeCommand(const char *cmd_line) {
   Command* cmd = CreateCommand(cmd_line);
   cmd->execute();
   // Please note that you must fork smash process for some commands (e.g., external commands....)
+
+
+
 }
