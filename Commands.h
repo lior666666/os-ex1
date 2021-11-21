@@ -63,9 +63,11 @@ public:
 };
 
 class ChangeDirCommand : public BuiltInCommand {
-    SmallShell* smash;
- public:
-    ChangeDirCommand(const char* cmd_line, SmallShell* smash);
+// TODO: Add your data members public:
+private:
+    char** last_pwd;
+public:
+    ChangeDirCommand(const char* cmd_line, char** plastPwd);
     virtual ~ChangeDirCommand() {}
     void execute() override;
 };
@@ -176,7 +178,6 @@ class SmallShell {
   const char* getPrompt();
   char** getLastPwd();
   void setPrompt(const char* prompt);
-  void setLastPwd(char** last_pwd);
   SmallShell(SmallShell const&)      = delete; // disable copy ctor
   void operator=(SmallShell const&)  = delete; // disable = operator
   static SmallShell& getInstance() // make SmallShell singleton

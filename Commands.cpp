@@ -124,13 +124,12 @@ void GetCurrDirCommand::execute() {
 // <---------- END GetCurrDirCommand ------------>
 
 // <---------- START ChangeDirCommand ------------>
-/*
-ChangeDirCommand::ChangeDirCommand(const char* cmd_line, SmallShell* smash);: BuiltInCommand(cmd_line), smash(smash) {}
+ChangeDirCommand::ChangeDirCommand(const char* cmd_line, char** last_pwd): BuiltInCommand(cmd_line), last_pwd(last_pwd){}
 void ChangeDirCommand:: execute(){
     if(args_length > 2){
         std::cerr << "smash error: cd: too many arguments" << endl;
     }
-    else if(length == 2){
+    else if(args_length == 2){
         char sign[] = "-";
         if(strcmp(args[1], sign) == 0){
             if(*(this->last_pwd) == NULL){
@@ -147,10 +146,7 @@ void ChangeDirCommand:: execute(){
                     *this->last_pwd = getcwd(NULL, 0);
                 }
                 else{
-                    std::cout << copy_last_pwd << "\n";
-//                    free(*last_pwd);
-//                    this->last_pwd = &prev_location;
-//                    std::cout << *this->last_pwd << "\n";
+                    std::cout << copy_last_pwd << endl;
                 }
                 free(copy_last_pwd);
             }
@@ -164,11 +160,11 @@ void ChangeDirCommand:: execute(){
                 *this->last_pwd = getcwd(NULL, 0);
             }
             else{
-                std::cout << args[1] << "\n";
+                std::cout << args[1] << endl;
             }
         }
     }
-}*/
+}
 // <---------- END ChangeDirCommand ------------>
 
 // <---------- START JobsCommand ------------>
@@ -278,6 +274,9 @@ const char* SmallShell::getPrompt(){
 void SmallShell::setPrompt(const char* prompt){
     this->prompt = prompt;
 }
+char** SmallShell:: getLastPwd(){
+    return last_pwd;
+}
 SmallShell::~SmallShell() {}
 // <---------- END SmallShell ------------>
 
@@ -299,9 +298,9 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     else if (firstWord.compare("pwd") == 0) {
         return new GetCurrDirCommand(cmd_line);
     }
-    //else if (firstWord.compare("cd") == 0) {
-    //    return new ChangeDirCommand(cmd_line, this);
-    //}
+    else if (firstWord.compare("cd") == 0) {
+        return new ChangeDirCommand(cmd_line, this->getLastPwd());
+    }
     else if (firstWord.compare("jobs") == 0) {
         return new JobsCommand(cmd_line, &jobs_list);
     }
