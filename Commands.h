@@ -63,11 +63,9 @@ public:
 };
 
 class ChangeDirCommand : public BuiltInCommand {
-// TODO: Add your data members public:
-private:
-    char** last_pwd;
+    SmallShell* smash;
 public:
-    ChangeDirCommand(const char* cmd_line, char** plastPwd);
+    ChangeDirCommand(const char* cmd_line, SmallShell* smash);
     virtual ~ChangeDirCommand() {}
     void execute() override;
 };
@@ -93,7 +91,7 @@ class QuitCommand : public BuiltInCommand {
   virtual ~QuitCommand() {}
   void execute() override;
 };
-
+/*
 class JobEntry {
     int job_id;
     const char* cmd_line;
@@ -107,6 +105,7 @@ class JobEntry {
     int getJobID();
     pid_t getProcessID();
     bool isStoppedProcess();
+    const char* getCmdLine();
 };
 
 class JobsList {
@@ -123,9 +122,14 @@ class JobsList {
   void updateMaxJobID();
   void updateMaxStoppedJobID();
   JobEntry* getJobById(int jobId);
-  void removeJobById(int jobId);
+  JobEntry* getJobByProcessId(pid_t process_id);
+  void removeJobByProcessId(pid_t process_to_delete);
   JobEntry* getLastStoppedJob();
-};
+  bool isVecEmpty();
+  int getMaxJobID();
+  int getMaxStoppedJobID();
+  void turnToForeground(JobEntry* bg_or_stopped_job);
+};*/
 
 class JobsCommand : public BuiltInCommand {
     JobsList* jobs;
@@ -136,7 +140,7 @@ class JobsCommand : public BuiltInCommand {
 };
 
 class KillCommand : public BuiltInCommand {
- // TODO: Add your data members
+    // TODO: Add your data members
  public:
   KillCommand(const char* cmd_line, JobsList* jobs);
   virtual ~KillCommand() {}
@@ -144,7 +148,7 @@ class KillCommand : public BuiltInCommand {
 };
 
 class ForegroundCommand : public BuiltInCommand {
- // TODO: Add your data members
+    JobsList* jobs;
  public:
   ForegroundCommand(const char* cmd_line, JobsList* jobs);
   virtual ~ForegroundCommand() {}
@@ -169,15 +173,16 @@ class HeadCommand : public BuiltInCommand {
 
 class SmallShell {
  private:
-    JobsList jobs_list;
+    //JobsList jobs_list;
     const char* prompt;
-    char** last_pwd;
+    const char* last_pwd;
   SmallShell();
  public:
   Command *CreateCommand(const char* cmd_line);
   const char* getPrompt();
-  char** getLastPwd();
+  const char* getLastPwd();
   void setPrompt(const char* prompt);
+  void setLastPwd(const char* last_pwd);
   SmallShell(SmallShell const&)      = delete; // disable copy ctor
   void operator=(SmallShell const&)  = delete; // disable = operator
   static SmallShell& getInstance() // make SmallShell singleton
