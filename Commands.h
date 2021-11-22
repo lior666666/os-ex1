@@ -86,7 +86,8 @@ class ShowPidCommand : public BuiltInCommand {
 
 class JobsList;
 class QuitCommand : public BuiltInCommand {
-// TODO: Add your data members public:
+    JobsList* jobs;
+public:
   QuitCommand(const char* cmd_line, JobsList* jobs);
   virtual ~QuitCommand() {}
   void execute() override;
@@ -117,7 +118,6 @@ class JobsList {
   ~JobsList();
   void addJob(Command* cmd, bool isStopped = false);
   void printJobsList();
-  void killAllJobs();
   void removeFinishedJobs();
   void updateMaxJobID();
   void updateMaxStoppedJobID();
@@ -129,6 +129,7 @@ class JobsList {
   int getMaxJobID();
   int getMaxStoppedJobID();
   void turnToForeground(JobEntry* bg_or_stopped_job);
+  void killAllJobs();
 };
 
 class JobsCommand : public BuiltInCommand {

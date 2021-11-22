@@ -162,22 +162,6 @@ void ChangeDirCommand::execute(){
         }
     }
 }
-/*
-void ChangeDirCommand::ChangeDirToPath(char* dest_path) {
-    char* copy_dest_path = (char*)malloc(strlen(dest_path) + 1);
-    strcpy(copy_dest_path, dest_path);
-    smash->setLastPwd(getcwd(NULL, 0));
-    if(chdir(copy_dest_path) == -1){
-        smash->setLastPwd(copy_dest_path);
-        free(copy_dest_path);
-        perror("smash error: chdir failed");
-    }
-    else{
-        std::cout << copy_dest_path << endl;
-    }
-    free(copy_dest_path);
-}
- */
 // <---------- END ChangeDirCommand ------------>
 
 // <---------- START JobsCommand ------------>
@@ -213,8 +197,21 @@ void ForegroundCommand::execute() {
         jobs->turnToForeground(bg_or_stopped_job);
     }
 }
-
 // <---------- END ForegroundCommand ------------>
+
+// <---------- START QuitCommand ------------>
+QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
+void QuitCommand::execute() {
+    char sign[] = "kill";
+    if (args[1] != NULL && strcmp(args[1], sign) == 0) {
+        jobs->killAllJobs();
+    }
+    int kill_status = kill(getpid(), 9); //SIGKILL
+    if (kill_status < 0) {
+        perror("smash error: kill failed");
+    }
+}
+// <---------- END QuitCommand ------------>
 
 // <---------- START JobEntry ------------>
 JobEntry::JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped) :
@@ -352,6 +349,17 @@ void JobsList::turnToForeground(JobEntry* bg_or_stopped_job) {
         updateMaxStoppedJobID();
     }
 }
+void JobsList::killAllJobs() {
+    std::cout << "smash: sending SIGKILL signal to " << jobs_vec->size() << " jobs:" << endl;
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
+        std::cout << it->getProcessID() << ": " << it->getCmdLine() << endl;
+        int kill_status = kill(it->getProcessID(), 9); //SIGKILL
+        if (kill_status < 0) {
+            perror("smash error: kill failed");
+        }
+    }
+}
 // <---------- END JobsList ------------>
 
 // <---------- START SmallShell ------------>
@@ -403,6 +411,9 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     }
     else if (firstWord.compare("fg") == 0) {
         return new ForegroundCommand(cmd_line, &jobs_list);
+    }
+    else if (firstWord.compare("quit") == 0) {
+        return new QuitCommand(cmd_line, &jobs_list);
     }
 /*
   *****need to add:*****
