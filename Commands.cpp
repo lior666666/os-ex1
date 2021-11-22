@@ -132,8 +132,7 @@ void ChangeDirCommand::execute(){
     else if(args_length == 2){
         char sign[] = "-";
         if(strcmp(args[1], sign) == 0){ // change to last pwd
-            std::cout << smash->getLastPwd() << endl;
-            if(strcmp(smash->getLastPwd(), "lior") == 0){ // there is not last pwd
+            if(smash->isLastPwdInitialized() == false){ // there is not last pwd
                 std::cerr << "smash error: cd: OLDPWD not set" << endl;
             }
             else{
@@ -152,6 +151,7 @@ void ChangeDirCommand::execute(){
             }
         }
         else{ // change to arg[1]
+            smash->changeLastPwdStatus(); // from this point there is last_pwd in the system!!
             smash->setLastPwd(getcwd(NULL, 0));
             if (chdir(args[1]) == -1){
                 perror("smash error: chdir failed");
@@ -181,7 +181,6 @@ void ChangeDirCommand::ChangeDirToPath(char* dest_path) {
 // <---------- END ChangeDirCommand ------------>
 
 // <---------- START JobsCommand ------------>
-/*
 JobsCommand::JobsCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void JobsCommand::execute() {
     jobs->removeFinishedJobs();
@@ -353,11 +352,10 @@ void JobsList::turnToForeground(JobEntry* bg_or_stopped_job) {
         updateMaxStoppedJobID();
     }
 }
-*/
 // <---------- END JobsList ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), last_pwd("lior") {}
+SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false) {}
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -366,12 +364,16 @@ void SmallShell::setPrompt(const char* prompt){
     this->prompt = prompt;
 }
 const char* SmallShell::getLastPwd(){
-    std::cout << this->prompt << endl;
-    std::cout << this->last_pwd << endl;
     return this->last_pwd;
 }
 void SmallShell::setLastPwd(const char* update_last_pwd) {
     this->last_pwd = update_last_pwd;
+}
+bool SmallShell::isLastPwdInitialized() {
+    return this->lastPwdInitialized;
+}
+void SmallShell::changeLastPwdStatus() {
+    this->lastPwdInitialized = true;
 }
 // <---------- END SmallShell ------------>
 
@@ -395,26 +397,15 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     }
     else if (firstWord.compare("cd") == 0) {
         return new ChangeDirCommand(cmd_line, this);
-    }/*
+    }
     else if (firstWord.compare("jobs") == 0) {
         return new JobsCommand(cmd_line, &jobs_list);
     }
     else if (firstWord.compare("fg") == 0) {
         return new ForegroundCommand(cmd_line, &jobs_list);
-    }*/
-	// For example:
+    }
 /*
-  string cmd_s = _trim(string(cmd_line));
-  string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
-
-  if (firstWord.compare("pwd") == 0) {
-    return new GetCurrDirCommand(cmd_line);
-  }
-  else if (firstWord.compare("showpid") == 0) {
-    return new ShowPidCommand(cmd_line);
-  }
-  else if ...
-  .....
+  *****need to add:*****
   else {
     return new ExternalCommand(cmd_line);
   }

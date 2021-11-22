@@ -91,7 +91,7 @@ class QuitCommand : public BuiltInCommand {
   virtual ~QuitCommand() {}
   void execute() override;
 };
-/*
+
 class JobEntry {
     int job_id;
     const char* cmd_line;
@@ -129,7 +129,7 @@ class JobsList {
   int getMaxJobID();
   int getMaxStoppedJobID();
   void turnToForeground(JobEntry* bg_or_stopped_job);
-};*/
+};
 
 class JobsCommand : public BuiltInCommand {
     JobsList* jobs;
@@ -173,16 +173,19 @@ class HeadCommand : public BuiltInCommand {
 
 class SmallShell {
  private:
-    //JobsList jobs_list;
+    JobsList jobs_list;
     const char* prompt;
     const char* last_pwd;
+    bool lastPwdInitialized;
   SmallShell();
  public:
   Command *CreateCommand(const char* cmd_line);
   const char* getPrompt();
   const char* getLastPwd();
+  bool isLastPwdInitialized();
   void setPrompt(const char* prompt);
   void setLastPwd(const char* last_pwd);
+  void changeLastPwdStatus();
   SmallShell(SmallShell const&)      = delete; // disable copy ctor
   void operator=(SmallShell const&)  = delete; // disable = operator
   static SmallShell& getInstance() // make SmallShell singleton
