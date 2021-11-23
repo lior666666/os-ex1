@@ -51,13 +51,16 @@ int _parseCommandLine(const char* cmd_line, char** args) {
     args[++i] = NULL;
   }
   return i;
-
   FUNC_EXIT()
 }
 
 bool _isBackgroundComamnd(const char* cmd_line) {
   const string str(cmd_line);
   return str[str.find_last_not_of(WHITESPACE)] == '&';
+}
+
+char* _removeConstToCmdLine(char* cmd_line) {
+    return cmd_line;
 }
 
 void _removeBackgroundSign(char* cmd_line) {
@@ -80,6 +83,7 @@ void _removeBackgroundSign(char* cmd_line) {
 
 // <---------- START Command ------------>
 Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
+    this->cmd_line_without_const = strdup(cmd_line);
     this->args_length = _parseCommandLine(cmd_line, this->args);
     _removeBackgroundSign(this->args[this->args_length-1]);
 }
@@ -87,6 +91,7 @@ Command::~Command() {
     for(int i = 0; i < this->args_length; i++) {
         free(this->args[i]);
     }
+    free(this->cmd_line_without_const);
 }
 const char* Command::getCmdLine() {
     return this->cmd_line;
@@ -96,6 +101,20 @@ const char* Command::getCmdLine() {
 // <---------- START BuiltInCommand ------------>
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
 // <---------- END BuiltInCommand ------------>
+
+// <---------- START ExternalCommand ------------>
+ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {}
+void ExternalCommand::execute() {
+    char file[] = "/bin/bash";
+    char sign[] = "-c";
+    _removeBackgroundSign(cmd_line_without_const);
+    char* const argv[] = {file, sign, cmd_line_without_const, NULL};
+    int execv_status = execv("/bin/bash", argv);
+    if (execv_status < 0) {
+        perror("smash error: execv failed");
+    }
+}
+// <---------- END ExternalCommand ------------>
 
 // <---------- START ChangePromptCommand ------------>
 ChangePromptCommand::ChangePromptCommand(const char* cmd_line, SmallShell* smash) : BuiltInCommand(cmd_line), smash(smash) {}
@@ -206,10 +225,7 @@ void QuitCommand::execute() {
     if (args[1] != NULL && strcmp(args[1], sign) == 0) {
         jobs->killAllJobs();
     }
-    int kill_status = kill(getpid(), 9); //SIGKILL
-    if (kill_status < 0) {
-        perror("smash error: kill failed");
-    }
+    exit(0);
 }
 // <---------- END QuitCommand ------------>
 
@@ -415,17 +431,30 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     else if (firstWord.compare("quit") == 0) {
         return new QuitCommand(cmd_line, &jobs_list);
     }
-/*
-  *****need to add:*****
-  else {
-    return new ExternalCommand(cmd_line);
-  }
-  */
-  return nullptr;
+    else {
+        pid_t pid = fork();
+        if (pid == 0) { //child
+            return new ExternalCommand(cmd_line);
+        }
+        else if (pid > 0) { //parent
+            if (_isBackgroundComamnd(cmd_line) == false) {
+                pid_t wait_status = waitpid(pid, NULL, 0);
+                if (wait_status < 0) {
+                    perror("smash error: waitpid failed");
+                }
+            }
+        }
+        else {
+            perror("smash error: fork failed");
+        }
+    }
+    return nullptr;
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
   Command* cmd = CreateCommand(cmd_line);
-  cmd->execute();
+  if (cmd != NULL) {
+      cmd->execute();
+  }
   // Please note that you must fork smash process for some commands (e.g., external commands....)
 }

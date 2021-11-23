@@ -10,6 +10,7 @@
 class Command {
  protected:
     const char* cmd_line;
+    char* cmd_line_without_const;
     char* args[COMMAND_MAX_ARGS];
     int args_length;
  public:
