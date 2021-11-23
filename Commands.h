@@ -7,6 +7,45 @@
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (21)
 
+class JobEntry {
+    int job_id;
+    const char* cmd_line;
+    pid_t process_id;
+    time_t time_inserted;
+    bool isStopped;
+public:
+    JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped);
+    ~JobEntry();
+    void printJob();
+    int getJobID();
+    pid_t getProcessID();
+    bool isStoppedProcess();
+    const char* getCmdLine();
+};
+
+class JobsList {
+    std::vector<JobEntry>* jobs_vec;
+    int max_job_id;
+    int max_stopped_jod_id;
+public:
+    JobsList();
+    ~JobsList();
+    void addJob(const char* cmd_line, bool isStopped = false);
+    void printJobsList();
+    void removeFinishedJobs();
+    void updateMaxJobID();
+    void updateMaxStoppedJobID();
+    JobEntry* getJobById(int jobId);
+    JobEntry* getJobByProcessId(pid_t process_id);
+    void removeJobByProcessId(pid_t process_to_delete);
+    JobEntry* getLastStoppedJob();
+    bool isVecEmpty();
+    int getMaxJobID();
+    int getMaxStoppedJobID();
+    void turnToForeground(JobEntry* bg_or_stopped_job);
+    void killAllJobs();
+};
+
 class Command {
  protected:
     const char* cmd_line;
@@ -30,8 +69,9 @@ class BuiltInCommand : public Command {
 };
 
 class ExternalCommand : public Command {
+    JobsList* jobs;
  public:
-  ExternalCommand(const char* cmd_line);
+  ExternalCommand(const char* cmd_line, JobsList* jobs);
   virtual ~ExternalCommand() {}
   void execute() override;
 };
@@ -85,52 +125,12 @@ class ShowPidCommand : public BuiltInCommand {
   void execute() override;
 };
 
-class JobsList;
 class QuitCommand : public BuiltInCommand {
     JobsList* jobs;
 public:
   QuitCommand(const char* cmd_line, JobsList* jobs);
   virtual ~QuitCommand() {}
   void execute() override;
-};
-
-class JobEntry {
-    int job_id;
-    const char* cmd_line;
-    pid_t process_id;
-    time_t time_inserted;
-    bool isStopped;
- public:
-    JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped);
-    ~JobEntry();
-    void printJob();
-    int getJobID();
-    pid_t getProcessID();
-    bool isStoppedProcess();
-    const char* getCmdLine();
-};
-
-class JobsList {
-    std::vector<JobEntry>* jobs_vec;
-    int max_job_id;
-    int max_stopped_jod_id;
- public:
-  JobsList();
-  ~JobsList();
-  void addJob(Command* cmd, bool isStopped = false);
-  void printJobsList();
-  void removeFinishedJobs();
-  void updateMaxJobID();
-  void updateMaxStoppedJobID();
-  JobEntry* getJobById(int jobId);
-  JobEntry* getJobByProcessId(pid_t process_id);
-  void removeJobByProcessId(pid_t process_to_delete);
-  JobEntry* getLastStoppedJob();
-  bool isVecEmpty();
-  int getMaxJobID();
-  int getMaxStoppedJobID();
-  void turnToForeground(JobEntry* bg_or_stopped_job);
-  void killAllJobs();
 };
 
 class JobsCommand : public BuiltInCommand {

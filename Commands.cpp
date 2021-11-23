@@ -81,6 +81,160 @@ void _removeBackgroundSign(char* cmd_line) {
   cmd_line[str.find_last_not_of(WHITESPACE, idx)] = 0;
 }
 
+// <---------- START JobEntry ------------>
+JobEntry::JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped) :
+        job_id(job_id), cmd_line(cmd_line), process_id(process_id), time_inserted(time_inserted), isStopped(isStopped) {}
+JobEntry::~JobEntry() {}
+void JobEntry::printJob() {
+    if (this->isStopped) {
+        std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
+                  this->process_id << " " << difftime(this->time_inserted, time(NULL)) << " (stopped)" << endl;
+    }
+    else {
+        std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
+                  this->process_id << " " << difftime(this->time_inserted, time(NULL)) << endl;
+    }
+}
+pid_t JobEntry::getProcessID() {
+    return this->process_id;
+}
+int JobEntry::getJobID() {
+    return this->job_id;
+}
+bool JobEntry::isStoppedProcess() {
+    return this->isStopped;
+}
+const char* JobEntry::getCmdLine() {
+    return this->cmd_line;
+}
+// <---------- END JobEntry ------------>
+
+// <---------- START JobsList ------------>
+JobsList::JobsList() {
+    jobs_vec = new std::vector<JobEntry>;
+    max_job_id = 0;
+    max_stopped_jod_id = 0;
+}
+JobsList::~JobsList() {
+    delete jobs_vec;
+}
+void JobsList::addJob(const char* cmd_line, bool isStopped) {
+    pid_t pid = getpid();
+    if (pid < 0) {
+        perror("smash error: getpid failed");
+    }
+    JobEntry* job = new JobEntry(max_job_id++, cmd_line, pid, time(NULL), isStopped);
+    jobs_vec->push_back(*job);
+}
+void JobsList::printJobsList() {
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
+        it->printJob();
+    }
+}
+void JobsList::removeFinishedJobs() {
+    pid_t kidpid = 1;
+    int status;
+    while(kidpid > 0) {
+        kidpid = waitpid(0, &status, WNOHANG);
+        if (kidpid < 0) {
+            std::cout << "66666666" << endl;
+            perror("smash error: waitpid failed");
+            break;
+        }
+        this->removeJobByProcessId(kidpid);
+    }
+    // need to do the rows below after every change in the vec
+    updateMaxJobID();
+    updateMaxStoppedJobID();
+}
+void JobsList::updateMaxJobID() {
+    if (jobs_vec->size() != 0)
+        max_job_id = jobs_vec->back().getJobID(); // back() is the last element in the vec
+}
+void JobsList::updateMaxStoppedJobID() {
+    if (jobs_vec->size() != 0){
+        JobEntry* last_stopped = getLastStoppedJob();
+        if (last_stopped) // if there is stopped job in the vec
+            max_stopped_jod_id = last_stopped->getJobID();
+        else
+            max_stopped_jod_id = 0;
+    }
+}
+JobEntry* JobsList::getJobById(int jobId) {
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++)
+        if(it->getJobID() == jobId)
+            return &(*it);
+    return NULL;
+}
+JobEntry* JobsList::getJobByProcessId(pid_t process_id) {
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++)
+        if(it->getProcessID() == process_id)
+            return &(*it);
+    return NULL;
+}
+void JobsList::removeJobByProcessId(pid_t process_to_delete) {
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
+        if(it->getProcessID() == process_to_delete) {
+            jobs_vec->erase(it);
+            break;
+        }
+    }
+}
+JobEntry* JobsList::getLastStoppedJob() {
+    vector<JobEntry>::reverse_iterator it;
+    for(it = jobs_vec->rbegin(); it != jobs_vec->rend(); it++) // reverse loop!!
+        if(it->isStoppedProcess())
+            return &(*it);
+    return NULL;
+}
+bool JobsList::isVecEmpty() {
+    return (jobs_vec->size() == 0);
+}
+int JobsList::getMaxJobID() {
+    return max_job_id;
+}
+int JobsList::getMaxStoppedJobID() {
+    return max_stopped_jod_id;
+}
+void JobsList::turnToForeground(JobEntry* bg_or_stopped_job) {
+    if (bg_or_stopped_job == NULL) { // something wrong!!
+        std::cerr << "something wrong!!" << endl;
+    }
+    else {
+        pid_t job_pid = bg_or_stopped_job->getProcessID();
+        std::cout << bg_or_stopped_job->getCmdLine() << " : " << job_pid << endl;
+        int kill_status = kill(job_pid, 18); //SIGCONT
+        if (kill_status < 0) {
+            perror("smash error: kill failed");
+            return;
+        }
+        pid_t wait_status = waitpid(job_pid, NULL, 0);
+        if (wait_status < 0) {
+            perror("smash error: waitpid failed");
+            return;
+        }
+        removeJobByProcessId(job_pid); //remove from vec
+        updateMaxJobID();
+        updateMaxStoppedJobID();
+    }
+}
+void JobsList::killAllJobs() {
+    std::cout << "smash: sending SIGKILL signal to " << jobs_vec->size() << " jobs:" << endl;
+    vector<JobEntry>::iterator it;
+    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
+        std::cout << it->getProcessID() << ": " << it->getCmdLine() << endl;
+        int kill_status = kill(it->getProcessID(), 9); //SIGKILL
+        if (kill_status < 0) {
+            perror("smash error: kill failed");
+        }
+    }
+}
+// <---------- END JobsList ------------>
+
 // <---------- START Command ------------>
 Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
     this->cmd_line_without_const = strdup(cmd_line);
@@ -103,8 +257,13 @@ BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
 // <---------- END BuiltInCommand ------------>
 
 // <---------- START ExternalCommand ------------>
-ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {}
+ExternalCommand::ExternalCommand(const char* cmd_line, JobsList* jobs) : Command(cmd_line), jobs(jobs) {}
 void ExternalCommand::execute() {
+    if (_isBackgroundComamnd(cmd_line) == true) {
+        jobs->addJob(cmd_line, false);
+        jobs->updateMaxJobID();
+        jobs->updateMaxStoppedJobID();
+    }
     char file[] = "/bin/bash";
     char sign[] = "-c";
     _removeBackgroundSign(cmd_line_without_const);
@@ -229,155 +388,6 @@ void QuitCommand::execute() {
 }
 // <---------- END QuitCommand ------------>
 
-// <---------- START JobEntry ------------>
-JobEntry::JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped) :
-        job_id(job_id), cmd_line(cmd_line), process_id(process_id), time_inserted(time_inserted), isStopped(isStopped) {}
-JobEntry::~JobEntry() {}
-void JobEntry::printJob() {
-    if (this->isStopped) {
-        std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
-            this->process_id << " " << difftime(this->time_inserted, time(NULL)) << " (stopped)" << endl;
-    }
-    else {
-        std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
-            this->process_id << " " << difftime(this->time_inserted, time(NULL)) << endl;
-    }
-}
-pid_t JobEntry::getProcessID() {
-    return this->process_id;
-}
-int JobEntry::getJobID() {
-    return this->job_id;
-}
-bool JobEntry::isStoppedProcess() {
-    return this->isStopped;
-}
-const char* JobEntry::getCmdLine() {
-    return this->cmd_line;
-}
-// <---------- END JobEntry ------------>
-
-// <---------- START JobsList ------------>
-JobsList::JobsList() {
-    jobs_vec = new std::vector<JobEntry>;
-    max_job_id = 0;
-    max_stopped_jod_id = 0;
-}
-JobsList::~JobsList() {
-    delete jobs_vec;
-}
-void JobsList::addJob(Command* cmd, bool isStopped) {
-    JobEntry* job = new JobEntry(max_job_id++, cmd->getCmdLine(), getpid(), time(NULL), isStopped);
-    jobs_vec->push_back(*job);
-}
-void JobsList::printJobsList() {
-    vector<JobEntry>::iterator it;
-    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
-        it->printJob();
-    }
-}
-void JobsList::removeFinishedJobs() {
-    pid_t kidpid = 1;
-    int status;
-    while(kidpid > 0) {
-        kidpid = waitpid(-1, &status, WNOHANG);
-        if (kidpid < 0) {
-            perror("smash error: waitpid failed");
-            break;
-        }
-        this->removeJobByProcessId(kidpid);
-    }
-    // need to do the rows below after every change in the vec
-    updateMaxJobID();
-    updateMaxStoppedJobID();
-}
-void JobsList::updateMaxJobID() {
-    if (jobs_vec->size() != 0)
-        max_job_id = jobs_vec->back().getJobID(); // back() is the last element in the vec
-}
-void JobsList::updateMaxStoppedJobID() {
-    if (jobs_vec->size() != 0){
-        JobEntry* last_stopped = getLastStoppedJob();
-        if (last_stopped) // if there is stopped job in the vec
-            max_stopped_jod_id = last_stopped->getJobID();
-        else
-            max_stopped_jod_id = 0;
-    }
-}
-JobEntry* JobsList::getJobById(int jobId) {
-    vector<JobEntry>::iterator it;
-    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++)
-        if(it->getJobID() == jobId)
-            return &(*it);
-    return NULL;
-}
-JobEntry* JobsList::getJobByProcessId(pid_t process_id) {
-    vector<JobEntry>::iterator it;
-    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++)
-        if(it->getProcessID() == process_id)
-            return &(*it);
-    return NULL;
-}
-void JobsList::removeJobByProcessId(pid_t process_to_delete) {
-    vector<JobEntry>::iterator it;
-    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
-        if(it->getProcessID() == process_to_delete) {
-            jobs_vec->erase(it);
-            break;
-        }
-    }
-}
-JobEntry* JobsList::getLastStoppedJob() {
-    vector<JobEntry>::reverse_iterator it;
-    for(it = jobs_vec->rbegin(); it != jobs_vec->rend(); it++) // reverse loop!!
-        if(it->isStoppedProcess())
-            return &(*it);
-    return NULL;
-}
-bool JobsList::isVecEmpty() {
-    return (jobs_vec->size() == 0);
-}
-int JobsList::getMaxJobID() {
-    return max_job_id;
-}
-int JobsList::getMaxStoppedJobID() {
-    return max_stopped_jod_id;
-}
-void JobsList::turnToForeground(JobEntry* bg_or_stopped_job) {
-    if (bg_or_stopped_job == NULL) { // something wrong!!
-        std::cerr << "something wrong!!" << endl;
-    }
-    else {
-        pid_t job_pid = bg_or_stopped_job->getProcessID();
-        std::cout << bg_or_stopped_job->getCmdLine() << " : " << job_pid << endl;
-        int kill_status = kill(job_pid, 18); //SIGCONT
-        if (kill_status < 0) {
-            perror("smash error: kill failed");
-            return;
-        }
-        pid_t wait_status = waitpid(job_pid, NULL, 0);
-        if (wait_status < 0) {
-            perror("smash error: waitpid failed");
-            return;
-        }
-        removeJobByProcessId(job_pid); //remove from vec
-        updateMaxJobID();
-        updateMaxStoppedJobID();
-    }
-}
-void JobsList::killAllJobs() {
-    std::cout << "smash: sending SIGKILL signal to " << jobs_vec->size() << " jobs:" << endl;
-    vector<JobEntry>::iterator it;
-    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
-        std::cout << it->getProcessID() << ": " << it->getCmdLine() << endl;
-        int kill_status = kill(it->getProcessID(), 9); //SIGKILL
-        if (kill_status < 0) {
-            perror("smash error: kill failed");
-        }
-    }
-}
-// <---------- END JobsList ------------>
-
 // <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false) {}
 SmallShell::~SmallShell() {}
@@ -432,12 +442,17 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         return new QuitCommand(cmd_line, &jobs_list);
     }
     else {
+        bool isBackground = _isBackgroundComamnd(cmd_line);
+        if (isBackground == true) {
+            jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
+        }
         pid_t pid = fork();
         if (pid == 0) { //child
-            return new ExternalCommand(cmd_line);
+            setpgrp();
+            return new ExternalCommand(cmd_line, &jobs_list);
         }
         else if (pid > 0) { //parent
-            if (_isBackgroundComamnd(cmd_line) == false) {
+            if (isBackground == false) {
                 pid_t wait_status = waitpid(pid, NULL, 0);
                 if (wait_status < 0) {
                     perror("smash error: waitpid failed");
