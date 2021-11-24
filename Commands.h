@@ -30,7 +30,7 @@ class JobsList {
 public:
     JobsList();
     ~JobsList();
-    void addJob(const char* cmd_line, bool isStopped = false);
+    void addJob(const char* cmd_line, pid_t pid, bool isStopped = false);
     void printJobsList();
     void removeFinishedJobs();
     void updateMaxJobID();
@@ -142,7 +142,7 @@ class JobsCommand : public BuiltInCommand {
 };
 
 class KillCommand : public BuiltInCommand {
-    // TODO: Add your data members
+    JobsList* jobs;
  public:
   KillCommand(const char* cmd_line, JobsList* jobs);
   virtual ~KillCommand() {}
