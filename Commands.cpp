@@ -135,7 +135,7 @@ void JobsList::removeFinishedJobs() {
         pid_t kidpid = 1;
         int status;
         while (kidpid > 0) {
-            kidpid = waitpid(0, &status, WNOHANG);
+            kidpid = waitpid(-1, &status, WNOHANG);
             if (kidpid > 0) {
                 this->removeJobByProcessId(kidpid);
             }
@@ -347,18 +347,17 @@ KillCommand::KillCommand(const char* cmd_line, JobsList* jobs): BuiltInCommand(c
 void KillCommand::execute() {
     if(args_length!=3 || atoi(args[1])>-1 || atoi(args[1])<-64)
     {
-        std::cerr << "mash error: kill: invalid arguments" << endl;
+        std::cerr << "smash error: kill: invalid arguments" << endl;
     }
     else
     {
-        JobEntry* job_to_send_signal = jobs->getJobById(atoi(args[1]));
+        JobEntry* job_to_send_signal = jobs->getJobById(atoi(args[2]));
         if(job_to_send_signal == NULL){
             std::cerr <<  "smash error: kill: job-id " << args[2] << " does not exist" << endl;
         }
         else
         {
-            const string str(cmd_line);
-            if (kill(atoi(args[1]), job_to_send_signal->getProcessID()) != -1) {
+            if (kill(job_to_send_signal->getProcessID(), abs(atoi(args[1]))) != -1) {
                 std::cout << "signal number " << abs(atoi(args[1])) << " was sent to pid "
                           << job_to_send_signal->getProcessID() << endl;
             }
@@ -368,7 +367,7 @@ void KillCommand::execute() {
         }
     }
 }
-// <---------- END KillCommand ------------>
+// <---------- END KillCommand ------------>Z
 
 // <---------- START ForegroundCommand ------------>
 ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
