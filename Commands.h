@@ -3,7 +3,6 @@
 
 #include <string.h>
 #include <vector>
-#include <memory>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (21)
@@ -25,25 +24,25 @@ public:
 };
 
 class JobsList {
-    std::vector<std::shared_ptr<JobEntry>>* jobs_vec;
+    std::vector<JobEntry>* jobs_vec;
     int max_job_id;
     int max_stopped_jod_id;
 public:
     JobsList();
     ~JobsList();
-    void addJob(const char* cmd_line, bool isStopped = false);
+    void addJob(const char* cmd_line, pid_t pid, bool isStopped = false);
     void printJobsList();
     void removeFinishedJobs();
     void updateMaxJobID();
     void updateMaxStoppedJobID();
-    std::shared_ptr<JobEntry> getJobById(int jobId);
-    std::shared_ptr<JobEntry> getJobByProcessId(pid_t process_id);
+    JobEntry* getJobById(int jobId);
+    JobEntry* getJobByProcessId(pid_t process_id);
     void removeJobByProcessId(pid_t process_to_delete);
-    std::shared_ptr<JobEntry> getLastStoppedJob();
+    JobEntry* getLastStoppedJob();
     bool isVecEmpty();
     int getMaxJobID();
     int getMaxStoppedJobID();
-    void turnToForeground(std::shared_ptr<JobEntry> bg_or_stopped_job);
+    void turnToForeground(JobEntry* bg_or_stopped_job);
     void killAllJobs();
 };
 
@@ -149,7 +148,6 @@ public:
     virtual ~KillCommand() {}
     void execute() override;
 };
-
 
 class ForegroundCommand : public BuiltInCommand {
     JobsList* jobs;
