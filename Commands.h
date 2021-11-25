@@ -20,6 +20,7 @@ public:
     int getJobID();
     pid_t getProcessID();
     bool isStoppedProcess();
+    void setIsStopped(bool setStopped);
     const char* getCmdLine();
 };
 
@@ -43,6 +44,7 @@ public:
     int getMaxJobID();
     int getMaxStoppedJobID();
     void turnToForeground(JobEntry* bg_or_stopped_job);
+    void resumesStoppedJob(JobEntry* stopped_job);
     void killAllJobs();
 };
 
@@ -158,7 +160,7 @@ class ForegroundCommand : public BuiltInCommand {
 };
 
 class BackgroundCommand : public BuiltInCommand {
- // TODO: Add your data members
+    JobsList* jobs;
  public:
   BackgroundCommand(const char* cmd_line, JobsList* jobs);
   virtual ~BackgroundCommand() {}

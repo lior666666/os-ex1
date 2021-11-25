@@ -107,6 +107,9 @@ bool JobEntry::isStoppedProcess() {
 const char* JobEntry::getCmdLine() {
     return this->cmd_line;
 }
+void JobEntry::setIsStopped(bool setStopped) {
+    this->isStopped = setStopped;
+}
 // <---------- END JobEntry ------------>
 
 // <---------- START JobsList ------------>
@@ -217,6 +220,22 @@ void JobsList::turnToForeground(JobEntry* bg_or_stopped_job) {
         removeJobByProcessId(job_pid); //remove from vec
         updateMaxJobID();
         updateMaxStoppedJobID();
+    }
+}
+void JobsList::resumesStoppedJob(JobEntry* stopped_job) {
+    if (stopped_job == NULL) { // something wrong!!
+        std::cerr << "something wrong!!" << endl;
+    }
+    else {
+        if(kill(stopped_job->getProcessID(), 18) != -1 ) {// sending signal for job to continue.
+            stopped_job->setIsStopped(false);
+            std::cout << stopped_job->getCmdLine() << " : " << stopped_job->getProcessID() << endl;
+            updateMaxJobID();
+            updateMaxStoppedJobID();
+        }
+        else {
+            perror("smash error: kill failed");
+        }
     }
 }
 void JobsList::killAllJobs() {
@@ -360,6 +379,14 @@ void KillCommand::execute() {
             if (kill(job_to_send_signal->getProcessID(), abs(atoi(args[1]))) != -1) {
                 std::cout << "signal number " << abs(atoi(args[1])) << " was sent to pid "
                           << job_to_send_signal->getProcessID() << endl;
+                if(abs(atoi(args[1])) == 19)
+                {
+                    job_to_send_signal->setIsStopped(true);
+                }
+                else if(abs(atoi(args[1])) == 18)
+                {
+                    job_to_send_signal->setIsStopped(false);
+                }
             }
             else {
                 perror("smash error: kill failed");
@@ -395,6 +422,40 @@ void ForegroundCommand::execute() {
     }
 }
 // <---------- END ForegroundCommand ------------>
+
+// <---------- START BackgroundCommand ------------>
+BackgroundCommand::BackgroundCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
+void BackgroundCommand::execute() {
+    jobs->removeFinishedJobs();
+    if (args_length > 2) { // more than 1 arg
+        std::cerr << "smash error: bg: invalid arguments" << endl;
+        return;
+    }
+    else if (args_length == 2) { // one arg
+        JobEntry* bg_or_stopped_job = jobs->getJobById(atoi(args[1]));
+        if (bg_or_stopped_job == NULL) { // there is no such bg/stopped job with given ID
+            std::cerr << "smash error: bg: job-id " << atoi(args[1]) << " does not exist" << endl;
+            return;
+        }
+        if (bg_or_stopped_job->isStoppedProcess()) {
+            jobs->resumesStoppedJob(bg_or_stopped_job);
+        }
+        else { // the process still running in the background
+            std::cerr << "smash error: bg: job-id " << atoi(args[1])<< " is already running in the background" << endl;
+        }
+    }
+    else { // zero arg
+        JobEntry* last_stopped_job = jobs->getLastStoppedJob();
+        if (last_stopped_job == NULL) { // there are no stopped jobs in the vec
+            std::cerr << "smash error: bg: there is no stopped jobs to resume" << endl;
+            return;
+        }
+        else {
+            jobs->resumesStoppedJob(last_stopped_job);
+        }
+    }
+}
+// <---------- END BackgroundCommand ------------>
 
 // <---------- START QuitCommand ------------>
 QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
@@ -459,6 +520,9 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     }
     else if (firstWord.compare("fg") == 0) {
         return new ForegroundCommand(cmd_line, &jobs_list);
+    }
+    else if (firstWord.compare("bg") == 0) {
+        return new BackgroundCommand(cmd_line, &jobs_list);
     }
     else if (firstWord.compare("quit") == 0) {
         return new QuitCommand(cmd_line, &jobs_list);
