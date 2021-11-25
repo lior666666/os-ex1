@@ -26,15 +26,12 @@ public:
 
 class JobsList {
     std::vector<JobEntry>* jobs_vec;
-    std::vector<JobEntry>* stopped_jobs_vec;
     int max_job_id;
     int max_stopped_jod_id;
 public:
     JobsList();
     ~JobsList();
     void addJob(const char* cmd_line, pid_t pid, bool isStopped = false);
-    void addStoppedJob(JobEntry* new_stopped_job);
-    void updateStoppedJobsVec();
     void printJobsList();
     void removeFinishedJobs();
     void updateMaxJobID();

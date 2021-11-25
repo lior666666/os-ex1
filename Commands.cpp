@@ -115,22 +115,17 @@ void JobEntry::setIsStopped(bool setStopped) {
 // <---------- START JobsList ------------>
 JobsList::JobsList() {
     jobs_vec = new std::vector<JobEntry>;
-    stopped_jobs_vec = new std::vector<JobEntry>;
     max_job_id = 0;
     max_stopped_jod_id = 0;
 }
 JobsList::~JobsList() {
     delete jobs_vec;
-    delete stopped_jobs_vec;
 }
 void JobsList::addJob(const char* cmd_line, pid_t pid, bool isStopped) {
     JobEntry* job = new JobEntry(max_job_id+1, strdup(cmd_line), pid, time(NULL), isStopped);
     jobs_vec->push_back(*job);
     updateMaxJobID();
     updateMaxStoppedJobID();
-}
-void JobsList::addStoppedJob(JobEntry* new_stopped_job){
-    stopped_jobs_vec->push_back(*new_stopped_job);
 }
 void JobsList::printJobsList() {
     vector<JobEntry>::iterator it;
@@ -166,15 +161,6 @@ void JobsList::updateMaxStoppedJobID() {
             max_stopped_jod_id = 0;
     }
 }
-void JobsList::updateStoppedJobsVec() {
-    vector<JobEntry>::iterator it;
-    for(it = stopped_jobs_vec->begin(); it != stopped_jobs_vec->end(); it++) {
-        if (!it->isStoppedProcess()) {
-            stopped_jobs_vec->erase(it);
-            break;
-        }
-    }
-}
 JobEntry* JobsList::getJobById(int jobId) {
     vector<JobEntry>::iterator it;
     for(it = jobs_vec->begin(); it != jobs_vec->end(); it++)
@@ -197,17 +183,13 @@ void JobsList::removeJobByProcessId(pid_t process_to_delete) {
             break;
         }
     }
-    for(it = stopped_jobs_vec->begin(); it != stopped_jobs_vec->end(); it++) {
-        if(it->getProcessID() == process_to_delete) {
-            stopped_jobs_vec->erase(it);
-            break;
-        }
-    }
 }
 JobEntry* JobsList::getLastStoppedJob() {
-    if(stopped_jobs_vec->empty())
-        return NULL;
-    return &stopped_jobs_vec->back();
+    vector<JobEntry>::reverse_iterator it;
+    for(it = jobs_vec->rbegin(); it != jobs_vec->rend(); it++) // reverse loop!!
+        if(it->isStoppedProcess())
+            return &(*it);
+    return NULL;
 }
 bool JobsList::isVecEmpty() {
     return (jobs_vec->size() == 0);
@@ -378,13 +360,13 @@ void KillCommand::execute() {
         }
         else
         {
+            const string str(cmd_line);
             if (kill(job_to_send_signal->getProcessID(), abs(atoi(args[1]))) != -1) {
                 std::cout << "signal number " << abs(atoi(args[1])) << " was sent to pid "
                           << job_to_send_signal->getProcessID() << endl;
                 if(abs(atoi(args[1])) == 19)
                 {
                     job_to_send_signal->setIsStopped(true);
-                    jobs->addStoppedJob(job_to_send_signal);
                 }
             }
             else {
@@ -441,7 +423,6 @@ void BackgroundCommand::execute() {
             if(kill(bg_or_stopped_job->getProcessID(), 18) != -1 )// sending signal for job to continue.
             {
                 bg_or_stopped_job->setIsStopped(false);
-                jobs->updateStoppedJobsVec();
                 std::cout << bg_or_stopped_job->getCmdLine() << " : " << bg_or_stopped_job->getProcessID() << endl;
                 jobs->updateMaxStoppedJobID();
             }
@@ -466,12 +447,7 @@ void BackgroundCommand::execute() {
         {
             if(kill(last_stopped_job->getProcessID(), 18) != -1 )// sending signal for job to continue.
             {
-                std::cout << "got here\n";
                 last_stopped_job->setIsStopped(false);
-                // since we are not using smart pointers, we have to update 2 vectors separately.
-                JobEntry* last_stopped_job_in_main_vec = jobs->getJobByProcessId(last_stopped_job->getProcessID());
-                last_stopped_job_in_main_vec->setIsStopped(false);
-                jobs->updateStoppedJobsVec();
                 std::cout << last_stopped_job->getCmdLine() << " : " << last_stopped_job->getProcessID() << endl;
                 jobs->updateMaxStoppedJobID();
             }
