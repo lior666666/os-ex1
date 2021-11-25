@@ -181,14 +181,17 @@ class SmallShell {
     const char* prompt;
     const char* last_pwd;
     bool lastPwdInitialized;
+    int curr_job_id;
   SmallShell();
  public:
   Command *CreateCommand(const char* cmd_line);
   const char* getPrompt();
   const char* getLastPwd();
+  int getCurrJobID();
   bool isLastPwdInitialized();
   void setPrompt(const char* prompt);
   void setLastPwd(const char* last_pwd);
+  void setCurrJobID(int job_id);
   void changeLastPwdStatus();
   SmallShell(SmallShell const&)      = delete; // disable copy ctor
   void operator=(SmallShell const&)  = delete; // disable = operator

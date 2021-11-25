@@ -469,7 +469,7 @@ void QuitCommand::execute() {
 // <---------- END QuitCommand ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false) {}
+SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -480,8 +480,14 @@ void SmallShell::setPrompt(const char* prompt){
 const char* SmallShell::getLastPwd(){
     return this->last_pwd;
 }
+int SmallShell::getCurrJobID(){
+    return this->curr_job_id;
+}
 void SmallShell::setLastPwd(const char* update_last_pwd) {
     this->last_pwd = update_last_pwd;
+}
+void SmallShell::setCurrJobID(int job_id) {
+    this->curr_job_id = job_id;
 }
 bool SmallShell::isLastPwdInitialized() {
     return this->lastPwdInitialized;
