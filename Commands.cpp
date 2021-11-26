@@ -1,7 +1,7 @@
 #include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <iostream>
-#include <fstream>
 #include <vector>
 #include <time.h>
 #include <sstream>
@@ -58,6 +58,41 @@ int _parseCommandLine(const char* cmd_line, char** args) {
 bool _isBackgroundComamnd(const char* cmd_line) {
     const string str(cmd_line);
     return str[str.find_last_not_of(WHITESPACE)] == '&';
+}
+// new added function!
+int checkForFile(const char* cmd_line,string* new_cmd_line , string* file_name)
+{
+    std::string cmd_line_copy(cmd_line);
+    std::string file_sign1 = ">";
+    std::string file_sign2 = ">>";
+    int file_sign1_position1 = cmd_line_copy.find(file_sign1);
+    int file_sign2_position2 = cmd_line_copy.find(file_sign2);
+    if(cmd_line_copy.find(file_sign1) != std::string::npos && cmd_line_copy.find(file_sign2) != std::string::npos) // there is >> and also >
+    {
+        if(file_sign1_position1< file_sign2_position2)
+        {
+            *new_cmd_line =  cmd_line_copy.substr(0,file_sign1_position1);
+            *file_name = cmd_line_copy.substr(file_sign1_position1+1, strlen(cmd_line));
+            return 0;
+        }
+        else
+        {
+            *new_cmd_line =  cmd_line_copy.substr(0,file_sign2_position2);
+            *file_name = cmd_line_copy.substr(file_sign2_position2+2, strlen(cmd_line));
+            return 1;
+        }
+    }
+    if(cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) == std::string::npos) // there is no >> and no >
+    {
+        file_name = NULL;
+        return 2;
+    }
+    else
+    {
+            *new_cmd_line =  cmd_line_copy.substr(0,file_sign1_position1);
+            *file_name = cmd_line_copy.substr(file_sign1_position1+1, strlen(cmd_line));
+            return 0;
+    }
 }
 
 char* _removeConstToCmdLine(char* cmd_line) {
@@ -255,7 +290,14 @@ void JobsList::killAllJobs() {
 // <---------- START Command ------------>
 Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
     this->cmd_line_without_const = strdup(cmd_line);
-    this->args_length = _parseCommandLine(cmd_line, this->args);
+    string file;
+    string new_cmd_line;
+    IO_status = checkForFile(cmd_line,&new_cmd_line ,&file);
+    file_name = file.c_str();
+    if(IO_status == 2)
+        this->args_length = _parseCommandLine(cmd_line, this->args);
+    else
+        this->args_length = _parseCommandLine(new_cmd_line.c_str(), this->args);
     _removeBackgroundSign(this->args[this->args_length-1]);
 }
 Command::~Command() {
@@ -267,13 +309,42 @@ Command::~Command() {
 const char* Command::getCmdLine() {
     return this->cmd_line;
 }
-bool Command::isIO() {
-    char sign[] = ">";
-    return strcmp(args[args_length-2], sign) == 0;
-}
-//void Command::writeToFIle(std::ostream& stream){
-//
+//int Command::isIO() {
+//    char sign[] = ">";
+//    char append_sign[] = ">>";
+//    if (strcmp(args[args_length-2], sign) == 0) {
+//        return 0; // IO without append
+//    }
+//    else if (strcmp(args[args_length-2], append_sign) == 0) {
+//        return 1; // IO with append
+//    }
+//    return 2; // not IO
 //}
+void Command::ChangeIO(int isAppend, const char* buff, int length) {
+    int open_fd = 0;
+    if(strcmp(file_name," ") == 0) // added this to try and get the error they want
+    {
+        perror("smash error: open failed");
+        return;
+    }
+    if (isAppend == 1) {
+        open_fd = open(file_name, O_WRONLY|O_CREAT|O_APPEND, 0666);
+    }
+    else {
+        open_fd = open(file_name, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+    }
+    if (open_fd == -1) {
+        perror("smash error: open failed");
+        return;
+    }
+    if (write(open_fd, buff, length) == -1) {
+        perror("smash error: write failed");
+        return;
+    }
+    if (close(open_fd) == -1) {
+        perror("smash error: close failed");
+    }
+}
 // <---------- END Command ------------>
 
 // <---------- START BuiltInCommand ------------>
@@ -307,14 +378,18 @@ void ChangePromptCommand::execute() {
 // <---------- START ShowPidCommand ------------>
 ShowPidCommand::ShowPidCommand(const char* cmd_line): BuiltInCommand(cmd_line) {}
 void ShowPidCommand::execute(){
-    if(isIO()) // write to file.
-    {
-        ofstream MyFile(args[args_length-1]);
-        MyFile<< "smash pid is " << getpid() << endl;
-        MyFile.close();
-        return;
+    if (IO_status == 2) {
+        std::cout << "smash pid is " << getpid() << endl;  // need to check if that is the proper way.
     }
-    std::cout << "smash pid is " << getpid() << endl;  // need to check if that is the proper way.
+    else {
+        string buff = "smash pid is ";
+        char* spid = (char*) malloc(sizeof((long)getpid()));
+        sprintf(spid, "%ld", (long)getpid());
+       // std::string str(spid);
+        buff.append(spid);
+        buff.append("\n");
+        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+    }
 }
 // <---------- END ShowPidCommand ------------>
 
@@ -322,14 +397,6 @@ void ShowPidCommand::execute(){
 GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
 void GetCurrDirCommand::execute() {
     char* curr_dir = getcwd(NULL, 0);
-    if (isIO()) // write ti file
-    {
-        ofstream MyFile(args[args_length-1]);
-        MyFile<< curr_dir << endl;
-        MyFile.close();
-        free(curr_dir);
-        return;
-    }
     std::cout << curr_dir << endl;
     free(curr_dir);
 }
@@ -338,11 +405,10 @@ void GetCurrDirCommand::execute() {
 // <---------- START ChangeDirCommand ------------>
 ChangeDirCommand::ChangeDirCommand(const char* cmd_line, SmallShell* smash): BuiltInCommand(cmd_line), smash(smash){}
 void ChangeDirCommand::execute(){
-
-    if((args_length > 2 && !isIO()) || args_length > 4){ // too many args
+    if(args_length > 2){ // too many args
         std::cerr << "smash error: cd: too many arguments" << endl;
     }
-    else if(args_length == 2 || (args_length == 4 && isIO())){
+    else if(args_length == 2){
         char sign[] = "-";
         if(strcmp(args[1], sign) == 0){ // change to last pwd
             if(smash->isLastPwdInitialized() == false){ // there is not last pwd
@@ -358,15 +424,7 @@ void ChangeDirCommand::execute(){
                     perror("smash error: chdir failed");
                 }
                 else{
-                    if(isIO()) // write to file.
-                    {
-                        ofstream MyFile(args[args_length-1]);
-                        MyFile<< copy_last_pwd << endl;
-                        MyFile.close();
-                    }
-                    else {
-                        std::cout << copy_last_pwd << endl;
-                    }
+                    std::cout << copy_last_pwd << endl;
                 }
                 free(copy_last_pwd);
             }
@@ -378,12 +436,6 @@ void ChangeDirCommand::execute(){
                 perror("smash error: chdir failed");
             }
             else{
-                if(isIO()) // write to file.
-                {
-                    ofstream MyFile(args[args_length-1]);
-                    MyFile<< args[1] << endl;
-                    MyFile.close();
-                }
                 std::cout << args[1] << endl;
             }
         }
@@ -432,7 +484,7 @@ void KillCommand::execute() {
         }
     }
 }
-// <---------- END KillCommand ------------>Z
+// <---------- END KillCommand ------------>
 
 // <---------- START ForegroundCommand ------------>
 ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}

@@ -53,16 +53,18 @@ protected:
     const char* cmd_line;
     char* cmd_line_without_const;
     char* args[COMMAND_MAX_ARGS];
+    const char* file_name;
+    int IO_status;
     int args_length;
 public:
     Command(const char* cmd_line);
     const char* getCmdLine();
+//    int isIO();
+    void ChangeIO(int isAppend, const char* buff, int length);
     virtual ~Command();
     virtual void execute() = 0;
     //virtual void prepare();
     //virtual void cleanup();
-    bool isIO();
-//    void writeToFIle(ostream& stream);
     // TODO: Add your extra methods if needed
 };
 
