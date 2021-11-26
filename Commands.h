@@ -57,6 +57,8 @@ class Command {
  public:
   Command(const char* cmd_line);
   const char* getCmdLine();
+  int isIO();
+  void ChangeIO(bool isAppend, const void* buff, int length);
   virtual ~Command();
   virtual void execute() = 0;
   //virtual void prepare();

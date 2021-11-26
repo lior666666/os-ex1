@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <iostream>
 #include <vector>
@@ -266,6 +267,37 @@ Command::~Command() {
 const char* Command::getCmdLine() {
     return this->cmd_line;
 }
+int Command::isIO() {
+    char sign[] = ">";
+    char append_sign[] = ">>";
+    if (strcmp(args[args_length-2], sign) == 0) {
+        return 0; // IO without append
+    }
+    else if (strcmp(args[args_length-2], append_sign) == 0) {
+        return 1; // IO with append
+    }
+    return 2; // not IO
+}
+void Command::ChangeIO(bool isAppend, const void* buff, int length) {
+    int open_fd = 0;
+    if (isAppend) {
+        open_fd = open(args[args_length-1], O_WRONLY|O_CREAT|O_APPEND, 0666);
+    }
+    else {
+        open_fd = open(args[args_length-1], O_WRONLY|O_CREAT|O_TRUNC, 0666);
+    }
+    if (open_fd == -1) {
+        perror("smash error: open failed");
+        return;
+    }
+    if (write(open_fd, buff, length) == -1) {
+        perror("smash error: write failed");
+        return;
+    }
+    if (close(open_fd) == -1) {
+        perror("smash error: close failed");
+    }
+}
 // <---------- END Command ------------>
 
 // <---------- START BuiltInCommand ------------>
@@ -299,7 +331,15 @@ void ChangePromptCommand::execute() {
 // <---------- START ShowPidCommand ------------>
 ShowPidCommand::ShowPidCommand(const char* cmd_line): BuiltInCommand(cmd_line) {}
 void ShowPidCommand::execute(){
-    std::cout << "smash pid is " << getpid() << endl;  // need to check if that is the proper way.
+    int IO_status = isIO();
+    if (IO_status == 2) {
+        std::cout << "smash pid is " << getpid() << endl;  // need to check if that is the proper way.
+    }
+    else {
+        const void* buff[] = "smash pid is " + getpid() + "\n";
+        bool isAppend = IO_status;
+        ChangeIO(isAppend, buff, strlen(buff));
+    }
 }
 // <---------- END ShowPidCommand ------------>
 
@@ -394,7 +434,7 @@ void KillCommand::execute() {
         }
     }
 }
-// <---------- END KillCommand ------------>Z
+// <---------- END KillCommand ------------>
 
 // <---------- START ForegroundCommand ------------>
 ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
