@@ -60,6 +60,47 @@ bool _isBackgroundComamnd(const char* cmd_line) {
   return str[str.find_last_not_of(WHITESPACE)] == '&';
 }
 
+// new added function!
+int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
+{
+    std::string cmd_line_copy(cmd_line);
+    std::string file_sign1 = " > ";
+    std::string file_sign2 = " >> ";
+    int file_sign1_position1 = cmd_line_copy.find(file_sign1);
+    int file_sign2_position2 = cmd_line_copy.find(file_sign2);
+    if(cmd_line_copy.find(file_sign1) != std::string::npos && cmd_line_copy.find(file_sign2) != std::string::npos) // there is >> and also >
+    {
+        if(file_sign1_position1< file_sign2_position2)
+        {
+            *new_cmd_line =  cmd_line_copy.substr(0,file_sign1_position1);
+            *file_name = cmd_line_copy.substr(file_sign1_position1+2, strlen(cmd_line));
+            return 0;
+        }
+        else
+        {
+            *new_cmd_line =  cmd_line_copy.substr(0,file_sign2_position2);
+            *file_name = cmd_line_copy.substr(file_sign2_position2+3, strlen(cmd_line));
+            return 1;
+        }
+    }
+    else if (cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) == std::string::npos) // there is no >> and no >
+    {
+        file_name = NULL;
+        return 2;
+    }
+    else if (cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) != std::string::npos) // there is >> and no >
+    {
+        *new_cmd_line =  cmd_line_copy.substr(0,file_sign2_position2);
+        *file_name = cmd_line_copy.substr(file_sign2_position2+3, strlen(cmd_line));
+        return 1;
+    }
+    else { // there is > and no >>
+        *new_cmd_line =  cmd_line_copy.substr(0,file_sign1_position1);
+        *file_name = cmd_line_copy.substr(file_sign1_position1+2, strlen(cmd_line));
+        return 0;
+    }
+}
+
 char* _removeConstToCmdLine(char* cmd_line) {
     return cmd_line;
 }
@@ -255,7 +296,14 @@ void JobsList::killAllJobs() {
 // <---------- START Command ------------>
 Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
     this->cmd_line_without_const = strdup(cmd_line);
-    this->args_length = _parseCommandLine(cmd_line, this->args);
+    string file;
+    string new_cmd_line;
+    IO_status = checkForFile(cmd_line,&new_cmd_line ,&file);
+    file_name = file.c_str();
+    if(IO_status == 2)
+        this->args_length = _parseCommandLine(cmd_line, this->args);
+    else
+        this->args_length = _parseCommandLine(new_cmd_line.c_str(), this->args);
     _removeBackgroundSign(this->args[this->args_length-1]);
 }
 Command::~Command() {
@@ -267,24 +315,29 @@ Command::~Command() {
 const char* Command::getCmdLine() {
     return this->cmd_line;
 }
-int Command::isIO() {
-    char sign[] = ">";
-    char append_sign[] = ">>";
-    if (strcmp(args[args_length-2], sign) == 0) {
-        return 0; // IO without append
-    }
-    else if (strcmp(args[args_length-2], append_sign) == 0) {
-        return 1; // IO with append
-    }
-    return 2; // not IO
-}
-void Command::ChangeIO(bool isAppend, const void* buff, int length) {
+//int Command::isIO() {
+//    char sign[] = ">";
+//    char append_sign[] = ">>";
+//    if (strcmp(args[args_length-2], sign) == 0) {
+//        return 0; // IO without append
+//    }
+//    else if (strcmp(args[args_length-2], append_sign) == 0) {
+//        return 1; // IO with append
+//    }
+//    return 2; // not IO
+//}
+void Command::ChangeIO(int isAppend, const char* buff, int length) {
     int open_fd = 0;
-    if (isAppend) {
-        open_fd = open(args[args_length-1], O_WRONLY|O_CREAT|O_APPEND, 0666);
+    if(strcmp(file_name," ") == 0) // added this to try and get the error they want
+    {
+        perror("smash error: open failed");
+        return;
+    }
+    if (isAppend == 1) {
+        open_fd = open(file_name, O_WRONLY|O_CREAT|O_APPEND, 0666);
     }
     else {
-        open_fd = open(args[args_length-1], O_WRONLY|O_CREAT|O_TRUNC, 0666);
+        open_fd = open(file_name, O_WRONLY|O_CREAT|O_TRUNC, 0666);
     }
     if (open_fd == -1) {
         perror("smash error: open failed");
@@ -331,14 +384,17 @@ void ChangePromptCommand::execute() {
 // <---------- START ShowPidCommand ------------>
 ShowPidCommand::ShowPidCommand(const char* cmd_line): BuiltInCommand(cmd_line) {}
 void ShowPidCommand::execute(){
-    int IO_status = isIO();
     if (IO_status == 2) {
         std::cout << "smash pid is " << getpid() << endl;  // need to check if that is the proper way.
     }
     else {
-        const void* buff[] = "smash pid is " + getpid() + "\n";
-        bool isAppend = IO_status;
-        ChangeIO(isAppend, buff, strlen(buff));
+        string buff = "smash pid is ";
+        char* spid = (char*) malloc(sizeof((long)getpid()));
+        sprintf(spid, "%ld", (long)getpid());
+        // std::string str(spid);
+        buff.append(spid);
+        buff.append("\n");
+        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
     }
 }
 // <---------- END ShowPidCommand ------------>
