@@ -60,7 +60,6 @@ bool _isBackgroundComamnd(const char* cmd_line) {
   return str[str.find_last_not_of(WHITESPACE)] == '&';
 }
 
-// new added function!
 int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
 {
     std::string cmd_line_copy(cmd_line);
@@ -68,23 +67,31 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
     std::string file_sign2 = " >> ";
     int file_sign1_position1 = cmd_line_copy.find(file_sign1);
     int file_sign2_position2 = cmd_line_copy.find(file_sign2);
-    if(cmd_line_copy.find(file_sign1) != std::string::npos && cmd_line_copy.find(file_sign2) != std::string::npos) // there is >> and also >
-    {
-        if(file_sign1_position1< file_sign2_position2)
-        {
+    if(cmd_line_copy.find(file_sign1) != std::string::npos && cmd_line_copy.find(file_sign2) != std::string::npos) { // there is >> and also >
+        if(file_sign1_position1< file_sign2_position2) {
             *new_cmd_line =  cmd_line_copy.substr(0,file_sign1_position1);
             *file_name = cmd_line_copy.substr(file_sign1_position1+2, strlen(cmd_line));
             return 0;
         }
-        else
-        {
+        else {
             *new_cmd_line =  cmd_line_copy.substr(0,file_sign2_position2);
             *file_name = cmd_line_copy.substr(file_sign2_position2+3, strlen(cmd_line));
             return 1;
         }
     }
-    else if (cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) == std::string::npos) // there is no >> and no >
-    {
+    else if (cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) == std::string::npos) { // there is no >> and no >
+        std::string file_sign1_last = " >";
+        std::string file_sign2_last = " >>";
+        if(cmd_line_copy.find(file_sign2_last) == cmd_line_copy.length()-3) { // if the last sub-string is " >>"
+            *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-3);
+            *file_name = cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length());
+            return 1;
+        }
+        if(cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) { // if the last sub-string is is " >"
+            *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-2);
+            *file_name = cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length());
+            return 0;
+        }
         file_name = NULL;
         return 2;
     }
@@ -127,14 +134,46 @@ void _removeBackgroundSign(char* cmd_line) {
 JobEntry::JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped) :
         job_id(job_id), cmd_line(cmd_line), process_id(process_id), time_inserted(time_inserted), isStopped(isStopped) {}
 JobEntry::~JobEntry() {}
-void JobEntry::printJob() {
-    if (this->isStopped) {
-        std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
-                  this->process_id << " " << difftime(time(NULL), this->time_inserted) << " secs (stopped)" << endl;
+void JobEntry::printJob(Command* cmd, int IO_status) {
+    if(IO_status == 2) {
+        if (this->isStopped) {
+            std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
+                      this->process_id << " " << difftime(time(NULL), this->time_inserted) << " secs (stopped)" << endl;
+        }
+        else {
+            std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
+                      this->process_id << " " << difftime(time(NULL), this->time_inserted) << " secs" << endl;
+        }
     }
     else {
-        std::cout << "[" << this->job_id << "] " << this->cmd_line << " : " <<
-                  this->process_id << " " << difftime(time(NULL), this->time_inserted) << " secs" << endl;
+        string buff("[");
+        char* s_job_id = (char*) malloc(sizeof(this->job_id));
+        sprintf(s_job_id, "%d", this->job_id);
+        buff.append(s_job_id);
+        buff.append("] ");
+        char* s_cmd_line = (char*) malloc(sizeof(this->cmd_line));
+        sprintf(s_cmd_line, "%s", this->cmd_line);
+        buff.append(s_cmd_line);
+        buff.append(" : ");
+        char* spid = (char*) malloc(sizeof((long)this->process_id));
+        sprintf(spid, "%ld", (long)this->process_id);
+        buff.append(spid);
+        buff.append(" ");
+        char* s_time = (char*) malloc(sizeof((long)difftime(time(NULL), this->time_inserted)));
+        sprintf(s_time, "%ld", (long)difftime(time(NULL), this->time_inserted));
+        buff.append(s_time);
+        if (this->isStopped) {
+            buff.append(" secs (stopped)");
+        }
+        else {
+            buff.append(" secs");
+        }
+        buff.append("\n");
+        cmd->ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+        free(s_job_id);
+        free(s_cmd_line);
+        free(spid);
+        free(s_time);
     }
 }
 pid_t JobEntry::getProcessID() {
@@ -169,10 +208,24 @@ void JobsList::addJob(const char* cmd_line, pid_t pid, bool isStopped) {
     updateMaxJobID();
     updateMaxStoppedJobID();
 }
-void JobsList::printJobsList() {
+void JobsList::printJobsList(Command* cmd, int IO_status) {
     vector<JobEntry>::iterator it;
+    bool first_print = true;
     for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
-        it->printJob();
+        if (IO_status == 2) {
+            it->printJob(cmd, IO_status);
+            first_print = false;
+        }
+        else {
+            if (first_print) {
+                it->printJob(cmd, IO_status);
+                first_print = false;
+            }
+            else {
+                it->printJob(cmd, 1);
+                first_print = false;
+            }
+        }
     }
 }
 void JobsList::removeFinishedJobs() {
@@ -242,13 +295,28 @@ int JobsList::getMaxJobID() {
 int JobsList::getMaxStoppedJobID() {
     return max_stopped_jod_id;
 }
-void JobsList::turnToForeground(JobEntry* bg_or_stopped_job) {
+void JobsList::turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd) {
     if (bg_or_stopped_job == NULL) { // something wrong!!
         std::cerr << "something wrong!!" << endl;
     }
     else {
         pid_t job_pid = bg_or_stopped_job->getProcessID();
-        std::cout << bg_or_stopped_job->getCmdLine() << " : " << job_pid << endl;
+        if(cmd->getIOStatus() == 2) {
+            std::cout << bg_or_stopped_job->getCmdLine() << " : " << job_pid << endl;
+        }
+        else {
+            char* s_cmd_line = (char*) malloc(sizeof(bg_or_stopped_job->getCmdLine()));
+            sprintf(s_cmd_line, "%s", bg_or_stopped_job->getCmdLine());
+            string buff(s_cmd_line);
+            buff.append(" : ");
+            char* spid = (char*) malloc(sizeof((long)job_pid));
+            sprintf(spid, "%ld", (long)job_pid);
+            buff.append(spid);
+            buff.append("\n");
+            cmd->ChangeIO(cmd->getIOStatus(), buff.c_str(), strlen(buff.c_str()));
+            free(s_cmd_line);
+            free(spid);
+        }
         int kill_status = kill(job_pid, 18); //SIGCONT
         if (kill_status < 0) {
             perror("smash error: kill failed");
@@ -264,14 +332,29 @@ void JobsList::turnToForeground(JobEntry* bg_or_stopped_job) {
         updateMaxStoppedJobID();
     }
 }
-void JobsList::resumesStoppedJob(JobEntry* stopped_job) {
+void JobsList::resumesStoppedJob(JobEntry* stopped_job, Command* cmd) {
     if (stopped_job == NULL) { // something wrong!!
         std::cerr << "something wrong!!" << endl;
     }
     else {
         if(kill(stopped_job->getProcessID(), 18) != -1 ) {// sending signal for job to continue.
             stopped_job->setIsStopped(false);
-            std::cout << stopped_job->getCmdLine() << " : " << stopped_job->getProcessID() << endl;
+            if(cmd->getIOStatus() == 2) {
+                std::cout << stopped_job->getCmdLine() << " : " << stopped_job->getProcessID() << endl;
+            }
+            else {
+                char* s_cmd_line = (char*) malloc(sizeof(stopped_job->getCmdLine()));
+                sprintf(s_cmd_line, "%s", stopped_job->getCmdLine());
+                string buff(s_cmd_line);
+                buff.append(" : ");
+                char* spid = (char*) malloc(sizeof((long)stopped_job->getProcessID()));
+                sprintf(spid, "%ld", (long)stopped_job->getProcessID());
+                buff.append(spid);
+                buff.append("\n");
+                cmd->ChangeIO(cmd->getIOStatus(), buff.c_str(), strlen(buff.c_str()));
+                free(s_cmd_line);
+                free(spid);
+            }
             updateMaxJobID();
             updateMaxStoppedJobID();
         }
@@ -280,11 +363,37 @@ void JobsList::resumesStoppedJob(JobEntry* stopped_job) {
         }
     }
 }
-void JobsList::killAllJobs() {
-    std::cout << "smash: sending SIGKILL signal to " << jobs_vec->size() << " jobs:" << endl;
+void JobsList::killAllJobs(Command* cmd) {
+    if(cmd->getIOStatus() == 2) {
+        std::cout << "smash: sending SIGKILL signal to " << jobs_vec->size() << " jobs:" << endl;
+    }
+    else {
+        string buff("smash: sending SIGKILL signal to ");
+        char* s_size = (char*) malloc(sizeof((long)jobs_vec->size()));
+        sprintf(s_size, "%ld", (long)jobs_vec->size());
+        buff.append(s_size);
+        buff.append(" jobs:\n");
+        cmd->ChangeIO(cmd->getIOStatus(), buff.c_str(), strlen(buff.c_str()));
+        free(s_size);
+    }
     vector<JobEntry>::iterator it;
     for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
-        std::cout << it->getProcessID() << ": " << it->getCmdLine() << endl;
+        if(cmd->getIOStatus() == 2) {
+            std::cout << it->getProcessID() << ": " << it->getCmdLine() << endl;
+        }
+        else {
+            char* spid = (char*) malloc(sizeof((long)it->getProcessID()));
+            sprintf(spid, "%ld", (long)it->getProcessID());
+            string buff(spid);
+            buff.append(": ");
+            char* s_cmd_line = (char*) malloc(sizeof(it->getCmdLine()));
+            sprintf(s_cmd_line, "%s", it->getCmdLine());
+            buff.append(s_cmd_line);
+            buff.append("\n");
+            cmd->ChangeIO(1, buff.c_str(), strlen(buff.c_str()));
+            free(s_cmd_line);
+            free(spid);
+        }
         int kill_status = kill(it->getProcessID(), 9); //SIGKILL
         if (kill_status < 0) {
             perror("smash error: kill failed");
@@ -296,10 +405,8 @@ void JobsList::killAllJobs() {
 // <---------- START Command ------------>
 Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
     this->cmd_line_without_const = strdup(cmd_line);
-    string file;
     string new_cmd_line;
-    IO_status = checkForFile(cmd_line,&new_cmd_line ,&file);
-    file_name = file.c_str();
+    IO_status = checkForFile(cmd_line,&new_cmd_line ,&file_name);
     if(IO_status == 2)
         this->args_length = _parseCommandLine(cmd_line, this->args);
     else
@@ -315,29 +422,16 @@ Command::~Command() {
 const char* Command::getCmdLine() {
     return this->cmd_line;
 }
-//int Command::isIO() {
-//    char sign[] = ">";
-//    char append_sign[] = ">>";
-//    if (strcmp(args[args_length-2], sign) == 0) {
-//        return 0; // IO without append
-//    }
-//    else if (strcmp(args[args_length-2], append_sign) == 0) {
-//        return 1; // IO with append
-//    }
-//    return 2; // not IO
-//}
+int Command::getIOStatus() {
+    return this->IO_status;
+}
 void Command::ChangeIO(int isAppend, const char* buff, int length) {
     int open_fd = 0;
-    if(strcmp(file_name," ") == 0) // added this to try and get the error they want
-    {
-        perror("smash error: open failed");
-        return;
-    }
     if (isAppend == 1) {
-        open_fd = open(file_name, O_WRONLY|O_CREAT|O_APPEND, 0666);
+        open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRWXU|S_IRWXG|S_IRWXO);
     }
     else {
-        open_fd = open(file_name, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+        open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_TRUNC, S_IRWXU|S_IRWXG|S_IRWXO);
     }
     if (open_fd == -1) {
         perror("smash error: open failed");
@@ -391,10 +485,10 @@ void ShowPidCommand::execute(){
         string buff = "smash pid is ";
         char* spid = (char*) malloc(sizeof((long)getpid()));
         sprintf(spid, "%ld", (long)getpid());
-        // std::string str(spid);
         buff.append(spid);
         buff.append("\n");
         ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+        free(spid);
     }
 }
 // <---------- END ShowPidCommand ------------>
@@ -403,7 +497,14 @@ void ShowPidCommand::execute(){
 GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
 void GetCurrDirCommand::execute() {
     char* curr_dir = getcwd(NULL, 0);
-    std::cout << curr_dir << endl;
+    if(IO_status == 2) {
+        std::cout << curr_dir << endl;
+    }
+    else {
+        string buff(curr_dir);
+        buff.append("\n");
+        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+    }
     free(curr_dir);
 }
 // <---------- END GetCurrDirCommand ------------>
@@ -430,7 +531,13 @@ void ChangeDirCommand::execute(){
                     perror("smash error: chdir failed");
                 }
                 else{
-                    std::cout << copy_last_pwd << endl;
+                    if(IO_status==2)
+                        std::cout << copy_last_pwd << endl;
+                    else{
+                        string buff(copy_last_pwd);
+                        buff.append("\n");
+                        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+                    }
                 }
                 free(copy_last_pwd);
             }
@@ -442,7 +549,13 @@ void ChangeDirCommand::execute(){
                 perror("smash error: chdir failed");
             }
             else{
-                std::cout << args[1] << endl;
+                if(IO_status==2)
+                    std::cout << args[1] << endl;
+                else{
+                    string buff(args[1]);
+                    buff.append("\n");
+                    ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+                }
             }
         }
     }
@@ -453,7 +566,7 @@ void ChangeDirCommand::execute(){
 JobsCommand::JobsCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void JobsCommand::execute() {
     jobs->removeFinishedJobs();
-    jobs->printJobsList();
+    jobs->printJobsList(this, IO_status);
 }
 // <---------- END JobsCommand ------------>
 
@@ -473,8 +586,24 @@ void KillCommand::execute() {
         else
         {
             if (kill(job_to_send_signal->getProcessID(), abs(atoi(args[1]))) != -1) {
-                std::cout << "signal number " << abs(atoi(args[1])) << " was sent to pid "
-                          << job_to_send_signal->getProcessID() << endl;
+                if(IO_status == 2) {
+                    std::cout << "signal number " << abs(atoi(args[1])) << " was sent to pid "
+                              << job_to_send_signal->getProcessID() << endl;
+                }
+                else {
+                    string buff("signal number ");
+                    char* s_signal = (char*) malloc(sizeof(abs(atoi(args[1]))));
+                    sprintf(s_signal, "%d", abs(atoi(args[1])));
+                    buff.append(s_signal);
+                    buff.append(" was sent to pid ");
+                    char* spid = (char*) malloc(sizeof((long)job_to_send_signal->getProcessID()));
+                    sprintf(spid, "%ld", (long)job_to_send_signal->getProcessID());
+                    buff.append(spid);
+                    buff.append("\n");
+                    ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+                    free(s_signal);
+                    free(spid);
+                }
                 if(abs(atoi(args[1])) == 19)
                 {
                     job_to_send_signal->setIsStopped(true);
@@ -506,7 +635,7 @@ void ForegroundCommand::execute() {
             std::cerr << "smash error: fg: job-id " << atoi(args[1]) << " does not exist" << endl;
             return;
         }
-        jobs->turnToForeground(bg_or_stopped_job);
+        jobs->turnToForeground(bg_or_stopped_job, this);
     }
     else { // zero arg
         if (jobs->isVecEmpty()) { // there is no jobs in the vec
@@ -514,7 +643,7 @@ void ForegroundCommand::execute() {
             return;
         }
         JobEntry* bg_or_stopped_job = jobs->getJobById(jobs->getMaxJobID());
-        jobs->turnToForeground(bg_or_stopped_job);
+        jobs->turnToForeground(bg_or_stopped_job, this);
     }
 }
 // <---------- END ForegroundCommand ------------>
@@ -534,7 +663,7 @@ void BackgroundCommand::execute() {
             return;
         }
         if (bg_or_stopped_job->isStoppedProcess()) {
-            jobs->resumesStoppedJob(bg_or_stopped_job);
+            jobs->resumesStoppedJob(bg_or_stopped_job, this);
         }
         else { // the process still running in the background
             std::cerr << "smash error: bg: job-id " << atoi(args[1])<< " is already running in the background" << endl;
@@ -547,7 +676,7 @@ void BackgroundCommand::execute() {
             return;
         }
         else {
-            jobs->resumesStoppedJob(last_stopped_job);
+            jobs->resumesStoppedJob(last_stopped_job, this);
         }
     }
 }
@@ -558,7 +687,7 @@ QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(
 void QuitCommand::execute() {
     char sign[] = "kill";
     if (args[1] != NULL && strcmp(args[1], sign) == 0) {
-        jobs->killAllJobs();
+        jobs->killAllJobs(this);
     }
     exit(0);
 }
