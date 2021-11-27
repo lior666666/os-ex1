@@ -87,13 +87,13 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
     {
         std::string file_sign1_last = " >";
         std::string file_sign2_last = " >>";
-        if(cmd_line_copy.find(file_sign2_last) == cmd_line_copy.length()-3)  // if the last char is >>
+        if(cmd_line_copy.find(file_sign2_last) == cmd_line_copy.length()-3)  // if the last sub-string is " >>"
         {
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-3);
             *file_name = cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length());
             return 1;
         }
-        if(cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) // if the last char is >
+        if(cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) // if the last sub-string is is " >"
         {
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-2);
             *file_name = cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length());
@@ -341,11 +341,6 @@ const char* Command::getCmdLine() {
 //}
 void Command::ChangeIO(int isAppend, const char* buff, int length) {
     int open_fd = 0;
-//    if(strcmp(file_name.c_str()," ") == 0) // added this to try and get the error they want
-//    {
-//        perror("smash error: open failed");
-//        return;
-//    }
     if (isAppend == 1) {
         open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_APPEND, 0666);
     }
@@ -416,7 +411,12 @@ void ShowPidCommand::execute(){
 GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
 void GetCurrDirCommand::execute() {
     char* curr_dir = getcwd(NULL, 0);
-    std::cout << curr_dir << endl;
+    if(IO_status == 2)
+        std::cout << curr_dir << endl;
+    else{
+        string buff(curr_dir);
+        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+    }
     free(curr_dir);
 }
 // <---------- END GetCurrDirCommand ------------>
@@ -443,7 +443,12 @@ void ChangeDirCommand::execute(){
                     perror("smash error: chdir failed");
                 }
                 else{
-                    std::cout << copy_last_pwd << endl;
+                    if(IO_status==2)
+                        std::cout << copy_last_pwd << endl;
+                    else{
+                        string buff(copy_last_pwd);
+                        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+                    }
                 }
                 free(copy_last_pwd);
             }
@@ -455,7 +460,12 @@ void ChangeDirCommand::execute(){
                 perror("smash error: chdir failed");
             }
             else{
-                std::cout << args[1] << endl;
+                if(IO_status==2)
+                    std::cout << args[1] << endl;
+                else{
+                    string buff(args[1]);
+                    ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+                }
             }
         }
     }
