@@ -58,8 +58,7 @@ int _parseCommandLine(const char* cmd_line, char** args) {
 bool _isPipeCommand(const char* cmd_line) {
     const string cmd_line_copy(cmd_line);
     std::string pipe_sign = " | ";
-    int pipe_sign_position = cmd_line_copy.find(pipe_sign);
-    return cmd_line_copy.find(pipe_sign_position) != std::string::npos;
+    return cmd_line_copy.find(pipe_sign) != std::string::npos;
 }
 
 void _splitPipeCommands(const char* cmd_line, std::string* left, std::string* right) {
@@ -774,89 +773,89 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         return new QuitCommand(cmd_line, &jobs_list);
     }
     else {
-        if (_isPipeCommand(cmd_line)) {
-            std::string left;
-            std::string right;
-            _splitPipeCommands(cmd_line, &left, &right);
-            int pipe_arr[2];
-            if (pipe(pipe_arr) == -1) {
-                perror("smash error: pipe failed");
-            }
-            else {
-                pid_t pid = fork();
-                if (pid == 0) { //child
-                    setpgrp();
-                    pid_t pipe_pid = fork();
-                    if (pipe_pid == 0) { //child - left command
-                        setpgrp();
-                        if (close(pipe_arr[0]) == -1) {
-                            perror("smash error: close failed");
-                        }
-                        else { //write
-                            if (dup2(pipe_arr[1], 1) == -1) {
-                                perror("smash error: dup2 failed");
-                            }
-                            else {
-                                executeCommand(left.c_str());
-                            }
-                        }
-                    } else if (pipe_pid > 0) { //parent - right command
-                        pid_t pipe_wait_status = waitpid(pipe_pid, NULL, 0);
-                        if (pipe_wait_status < 0) {
-                            perror("smash error: waitpid failed");
-                        }
-                        if (close(pipe_arr[1]) == -1) {
-                            perror("smash error: close failed");
-                        }
-                        else { //read
-                            if (dup2(pipe_arr[0], 0) == -1) {
-                                perror("smash error: dup2 failed");
-                            }
-                            else {
-                                executeCommand(right.c_str());
-                            }
-                        }
-                    } else {
-                        perror("smash error: fork failed");
-                    }
-                } else if (pid > 0) { //parent - smash
-                    pid_t wait_status = waitpid(pid, NULL, 0);
-                    if (wait_status < 0) {
-                        perror("smash error: waitpid failed");
-                    }
-                } else {
-                    perror("smash error: fork failed");
-                }
-            }
-        }
-        else {
-            bool isBackground = _isBackgroundComamnd(cmd_line);
-            pid_t pid = fork();
-            if (pid == 0) { //child
-                setpgrp();
-                return new ExternalCommand(cmd_line, &jobs_list);
-            } else if (pid > 0) { //parent
-                if (isBackground == false) {
-                    pid_t wait_status = waitpid(pid, NULL, 0);
-                    if (wait_status < 0) {
-                        perror("smash error: waitpid failed");
-                    }
-                } else {
-                    jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
-                    jobs_list.addJob(cmd_line, pid, false);
+        bool isBackground = _isBackgroundComamnd(cmd_line);
+        pid_t pid = fork();
+        if (pid == 0) { //child
+            setpgrp();
+            return new ExternalCommand(cmd_line, &jobs_list);
+        } else if (pid > 0) { //parent
+            if (isBackground == false) {
+                pid_t wait_status = waitpid(pid, NULL, 0);
+                if (wait_status < 0) {
+                    perror("smash error: waitpid failed");
                 }
             } else {
-                perror("smash error: fork failed");
+                jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
+                jobs_list.addJob(cmd_line, pid, false);
             }
+        } else {
+            perror("smash error: fork failed");
         }
     }
     return nullptr;
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
-  Command* cmd = CreateCommand(cmd_line);
-  if (cmd != NULL) {
-      cmd->execute();
-  }
+    if (_isPipeCommand(cmd_line)) {
+        std::string left;
+        std::string right;
+        _splitPipeCommands(cmd_line, &left, &right);
+        int pipe_arr[2];
+        pid_t pid = fork();
+        if (pid == 0) { //child
+            setpgrp();
+            if (pipe(pipe_arr) == -1) {
+                perror("smash error: pipe failed");
+            }
+            else {
+                pid_t pipe_pid = fork();
+                if (pipe_pid == 0) { //child - left command - write
+                    setpgrp();
+                    if (dup2(pipe_arr[1], STDOUT_FILENO) == -1) {
+                        perror("smash error: dup2 failed");
+                    }
+                    else {
+                        if (close(pipe_arr[0]) == -1) {
+                            perror("smash error: close failed");
+                        } else {
+                            executeCommand(left.c_str());
+                        }
+                    }
+                    if (close(pipe_arr[1]) == -1) {
+                        perror("smash error: close failed");
+                    }
+                } else if (pipe_pid > 0) { //parent - right command - read
+                    if (dup2(pipe_arr[0], STDIN_FILENO) == -1) {
+                        perror("smash error: dup2 failed");
+                    }
+                    else {
+                        if (close(pipe_arr[1]) == -1) {
+                            perror("smash error: close failed");
+                        } else {
+                            executeCommand(right.c_str());
+                        }
+                    }
+                    if (close(pipe_arr[0]) == -1) {
+                        perror("smash error: close failed");
+                    }
+                } else {
+                    perror("smash error: fork failed");
+                }
+            }
+        } else if (pid > 0) { //parent - smash
+            pid_t wait_status = waitpid(pid, NULL, 0);
+            if (wait_status < 0) {
+                perror("smash error: waitpid failed");
+            }
+        } else {
+            perror("smash error: fork failed");
+        }
+    }
+    else {
+        Command *cmd = CreateCommand(cmd_line);
+        if (cmd != NULL) {
+            cmd->execute();
+        }
+    }
   // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
