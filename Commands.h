@@ -7,6 +7,7 @@
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (21)
 
+class Command;
 class JobEntry {
     int job_id;
     const char* cmd_line;
@@ -16,7 +17,7 @@ class JobEntry {
 public:
     JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped);
     ~JobEntry();
-    void printJob();
+    void printJob(Command* cmd, int IO_status);
     int getJobID();
     pid_t getProcessID();
     bool isStoppedProcess();
@@ -32,7 +33,7 @@ public:
     JobsList();
     ~JobsList();
     void addJob(const char* cmd_line, pid_t pid, bool isStopped = false);
-    void printJobsList();
+    void printJobsList(Command* cmd, int IO_status);
     void removeFinishedJobs();
     void updateMaxJobID();
     void updateMaxStoppedJobID();
@@ -43,9 +44,9 @@ public:
     bool isVecEmpty();
     int getMaxJobID();
     int getMaxStoppedJobID();
-    void turnToForeground(JobEntry* bg_or_stopped_job);
-    void resumesStoppedJob(JobEntry* stopped_job);
-    void killAllJobs();
+    void turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd);
+    void resumesStoppedJob(JobEntry* stopped_job, Command* cmd);
+    void killAllJobs(Command* cmd);
 };
 
 class Command {
@@ -54,12 +55,12 @@ protected:
     char* cmd_line_without_const;
     char* args[COMMAND_MAX_ARGS];
     std::string file_name;
-//    const char* file_name;
     int IO_status;
     int args_length;
 public:
     Command(const char* cmd_line);
     const char* getCmdLine();
+    int getIOStatus();
     void ChangeIO(int isAppend, const char* buff, int length);
     virtual ~Command();
     virtual void execute() = 0;
@@ -172,8 +173,9 @@ public:
 };
 
 class HeadCommand : public BuiltInCommand {
+    JobsList* jobs;
 public:
-    HeadCommand(const char* cmd_line);
+    HeadCommand(const char* cmd_line, JobsList* jobs);
     virtual ~HeadCommand() {}
     void execute() override;
 };
