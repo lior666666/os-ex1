@@ -55,6 +55,21 @@ int _parseCommandLine(const char* cmd_line, char** args) {
   FUNC_EXIT()
 }
 
+bool _isPipeCommand(const char* cmd_line) {
+    const string cmd_line_copy(cmd_line);
+    std::string pipe_sign = " | ";
+    int pipe_sign_position = cmd_line_copy.find(pipe_sign);
+    return cmd_line_copy.find(pipe_sign_position) != std::string::npos;
+}
+
+void _splitPipeCommands(const char* cmd_line, std::string* left, std::string* right) {
+    const string cmd_line_copy(cmd_line);
+    std::string pipe_sign = " | ";
+    int pipe_sign_position = cmd_line_copy.find(pipe_sign);
+    *left = cmd_line_copy.substr(0, pipe_sign_position);
+    *right = cmd_line_copy.substr(pipe_sign_position+2, strlen(cmd_line));
+}
+
 bool _isBackgroundComamnd(const char* cmd_line) {
   const string str(cmd_line);
   return str[str.find_last_not_of(WHITESPACE)] == '&';
@@ -70,12 +85,12 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
     if(cmd_line_copy.find(file_sign1) != std::string::npos && cmd_line_copy.find(file_sign2) != std::string::npos) { // there is >> and also >
         if(file_sign1_position1< file_sign2_position2) {
             *new_cmd_line =  cmd_line_copy.substr(0,file_sign1_position1);
-            *file_name = cmd_line_copy.substr(file_sign1_position1+2, strlen(cmd_line));
+            *file_name = _trim(cmd_line_copy.substr(file_sign1_position1+2, strlen(cmd_line)));
             return 0;
         }
         else {
             *new_cmd_line =  cmd_line_copy.substr(0,file_sign2_position2);
-            *file_name = cmd_line_copy.substr(file_sign2_position2+3, strlen(cmd_line));
+            *file_name = _trim(cmd_line_copy.substr(file_sign2_position2+3, strlen(cmd_line)));
             return 1;
         }
     }
@@ -84,12 +99,12 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
         std::string file_sign2_last = " >>";
         if(cmd_line_copy.find(file_sign2_last) == cmd_line_copy.length()-3) { // if the last sub-string is " >>"
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-3);
-            *file_name = cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length());
+            *file_name = _trim(cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length()));
             return 1;
         }
         if(cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) { // if the last sub-string is is " >"
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-2);
-            *file_name = cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length());
+            *file_name = _trim(cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length()));
             return 0;
         }
         file_name = NULL;
@@ -97,13 +112,13 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
     }
     else if (cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) != std::string::npos) // there is >> and no >
     {
-        *new_cmd_line =  cmd_line_copy.substr(0,file_sign2_position2);
-        *file_name = cmd_line_copy.substr(file_sign2_position2+3, strlen(cmd_line));
+        *new_cmd_line = cmd_line_copy.substr(0,file_sign2_position2);
+        *file_name = _trim(cmd_line_copy.substr(file_sign2_position2+3, strlen(cmd_line)));
         return 1;
     }
     else { // there is > and no >>
         *new_cmd_line =  cmd_line_copy.substr(0,file_sign1_position1);
-        *file_name = cmd_line_copy.substr(file_sign1_position1+2, strlen(cmd_line));
+        *file_name = _trim(cmd_line_copy.substr(file_sign1_position1+2, strlen(cmd_line)));
         return 0;
     }
 }
@@ -573,7 +588,7 @@ void JobsCommand::execute() {
 // <---------- START KillCommand ------------>
 KillCommand::KillCommand(const char* cmd_line, JobsList* jobs): BuiltInCommand(cmd_line), jobs(jobs) {}
 void KillCommand::execute() {
-    if(args_length!=3 || atoi(args[1])>-1 || atoi(args[1])<-64)
+    if(args_length!=3)
     {
         std::cerr << "smash error: kill: invalid arguments" << endl;
     }
@@ -759,26 +774,80 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         return new QuitCommand(cmd_line, &jobs_list);
     }
     else {
-        bool isBackground = _isBackgroundComamnd(cmd_line);
-        pid_t pid = fork();
-        if (pid == 0) { //child
-            setpgrp();
-            return new ExternalCommand(cmd_line, &jobs_list);
-        }
-        else if (pid > 0) { //parent
-            if (isBackground == false) {
-                pid_t wait_status = waitpid(pid, NULL, 0);
-                if (wait_status < 0) {
-                    perror("smash error: waitpid failed");
-                }
+        if (_isPipeCommand(cmd_line)) {
+            std::string left;
+            std::string right;
+            _splitPipeCommands(cmd_line, &left, &right);
+            int pipe_arr[2];
+            if (pipe(pipe_arr) == -1) {
+                perror("smash error: pipe failed");
             }
             else {
-                jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
-                jobs_list.addJob(cmd_line, pid, false);
+                pid_t pid = fork();
+                if (pid == 0) { //child
+                    setpgrp();
+                    pid_t pipe_pid = fork();
+                    if (pipe_pid == 0) { //child - left command
+                        setpgrp();
+                        if (close(pipe_arr[0]) == -1) {
+                            perror("smash error: close failed");
+                        }
+                        else { //write
+                            if (dup2(pipe_arr[1], 1) == -1) {
+                                perror("smash error: dup2 failed");
+                            }
+                            else {
+                                executeCommand(left.c_str());
+                            }
+                        }
+                    } else if (pipe_pid > 0) { //parent - right command
+                        pid_t pipe_wait_status = waitpid(pipe_pid, NULL, 0);
+                        if (pipe_wait_status < 0) {
+                            perror("smash error: waitpid failed");
+                        }
+                        if (close(pipe_arr[1]) == -1) {
+                            perror("smash error: close failed");
+                        }
+                        else { //read
+                            if (dup2(pipe_arr[0], 0) == -1) {
+                                perror("smash error: dup2 failed");
+                            }
+                            else {
+                                executeCommand(right.c_str());
+                            }
+                        }
+                    } else {
+                        perror("smash error: fork failed");
+                    }
+                } else if (pid > 0) { //parent - smash
+                    pid_t wait_status = waitpid(pid, NULL, 0);
+                    if (wait_status < 0) {
+                        perror("smash error: waitpid failed");
+                    }
+                } else {
+                    perror("smash error: fork failed");
+                }
             }
         }
         else {
-            perror("smash error: fork failed");
+            bool isBackground = _isBackgroundComamnd(cmd_line);
+            pid_t pid = fork();
+            if (pid == 0) { //child
+                setpgrp();
+                return new ExternalCommand(cmd_line, &jobs_list);
+            } else if (pid > 0) { //parent
+                if (isBackground == false) {
+                    pid_t wait_status = waitpid(pid, NULL, 0);
+                    if (wait_status < 0) {
+                        perror("smash error: waitpid failed");
+                    }
+                } else {
+                    jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
+                    jobs_list.addJob(cmd_line, pid, false);
+                }
+            } else {
+                perror("smash error: fork failed");
+            }
         }
     }
     return nullptr;
