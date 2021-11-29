@@ -824,6 +824,9 @@ void SmallShell::executeCommand(const char *cmd_line) {
                     if (close(pipe_arr[1]) == -1) {
                         perror("smash error: close failed");
                     }
+                    if (close(STDOUT_FILENO) == -1) {
+                        perror("smash error: close failed");
+                    }
                 } else if (pipe_pid > 0) { //parent - right command - read
                     if (dup2(pipe_arr[0], STDIN_FILENO) == -1) {
                         perror("smash error: dup2 failed");
@@ -836,6 +839,9 @@ void SmallShell::executeCommand(const char *cmd_line) {
                         }
                     }
                     if (close(pipe_arr[0]) == -1) {
+                        perror("smash error: close failed");
+                    }
+                    if (close(STDIN_FILENO) == -1) {
                         perror("smash error: close failed");
                     }
                 } else {
