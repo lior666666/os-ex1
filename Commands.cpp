@@ -800,7 +800,7 @@ void SmallShell::executeCommand(const char *cmd_line) {
         std::string left;
         std::string right;
         _splitPipeCommands(cmd_line, &left, &right);
-        int pipe_arr[2];
+        int pipe_arr[2] = {0};
         pid_t pid = fork();
         if (pid == 0) { //child
             setpgrp();
@@ -849,9 +849,9 @@ void SmallShell::executeCommand(const char *cmd_line) {
                 }
             }
         } else if (pid > 0) { //parent - smash
-            pid_t wait_status = waitpid(pid, NULL, 0);
+            pid_t wait_status = wait(NULL);
             if (wait_status < 0) {
-                perror("smash error: waitpid failed");
+                perror("smash error: wait failed");
             }
         } else {
             perror("smash error: fork failed");
