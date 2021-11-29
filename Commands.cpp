@@ -726,13 +726,24 @@ void QuitCommand::execute() {
 // <---------- START HeadCommand ------------>
 HeadCommand::HeadCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void HeadCommand::execute() {
-    if(args_length < 3) {
-        std::cerr << "smash error: head: not enough arguments\n";
+    if(args_length < 2) {
+        std::cerr << "smash error: head: not enough arguments" << endl;
         return;
     }
     else {
-        int line_numbers = abs(atoi(args[1]));
-        int open_fd = open(args[2], O_RDONLY, 0666);
+        int line_numbers;
+        int open_fd;
+        if(args_length == 2) {
+            line_numbers = 10; // default value.
+            open_fd = open(args[1], O_RDONLY, 0666);
+        }
+        else {
+            line_numbers = abs(atoi(args[1]));
+            if (line_numbers == 0) {
+                return; // stop if we should not print any lines
+            }
+            open_fd = open(args[2], O_RDONLY, 0666);
+        }
         if (open_fd == -1) {
             perror("smash error: open failed");
             return;
@@ -768,8 +779,18 @@ void HeadCommand::execute() {
                 break;
             }
         }
-        for (int j = 0; j < i+1; ++j) {
-            std::cout << buff[j];
+        if(IO_status == 2) {
+            for (int j = 0; j < i+1; ++j) {
+                std::cout << buff[j];
+            }
+        }
+        else {
+            char buff_arr[i+2] = {0};
+            for (int j = 0; j < i+1; ++j) {
+                buff_arr[j] = buff[j];
+            }
+            string buff_str(buff_arr);
+            ChangeIO(IO_status, buff_str.c_str(), strlen(buff_str.c_str()));
         }
         free(buff);
     }
