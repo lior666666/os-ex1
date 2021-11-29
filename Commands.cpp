@@ -55,18 +55,34 @@ int _parseCommandLine(const char* cmd_line, char** args) {
   FUNC_EXIT()
 }
 
-bool _isPipeCommand(const char* cmd_line) {
+int _isPipeCommand(const char* cmd_line) {
     const string cmd_line_copy(cmd_line);
-    std::string pipe_sign = " | ";
-    return cmd_line_copy.find(pipe_sign) != std::string::npos;
+    std::string pipe_sign1 = " | ";
+    std::string pipe_sign2 = " |& ";
+    if (cmd_line_copy.find(pipe_sign1) != std::string::npos) {
+        return 1; // pipe cout
+    }
+    if (cmd_line_copy.find(pipe_sign2) != std::string::npos) {
+        return 2; // pipe cerr
+    }
+    return 0; // no pipe
 }
 
 void _splitPipeCommands(const char* cmd_line, std::string* left, std::string* right) {
     const string cmd_line_copy(cmd_line);
-    std::string pipe_sign = " | ";
-    int pipe_sign_position = cmd_line_copy.find(pipe_sign);
-    *left = cmd_line_copy.substr(0, pipe_sign_position);
-    *right = cmd_line_copy.substr(pipe_sign_position+2, strlen(cmd_line));
+    std::string pipe_sign1 = " | ";
+    std::string pipe_sign2 = " |& ";
+    int pipe = _isPipeCommand(cmd_line);
+    if (pipe == 1) {
+        int pipe_sign_position = cmd_line_copy.find(pipe_sign1);
+        *left = cmd_line_copy.substr(0, pipe_sign_position);
+        *right = cmd_line_copy.substr(pipe_sign_position + 2, strlen(cmd_line));
+    }
+    else { // pipe==2
+        int pipe_sign_position = cmd_line_copy.find(pipe_sign2);
+        *left = cmd_line_copy.substr(0, pipe_sign_position);
+        *right = cmd_line_copy.substr(pipe_sign_position + 3, strlen(cmd_line));
+    }
 }
 
 bool _isBackgroundComamnd(const char* cmd_line) {
@@ -707,6 +723,59 @@ void QuitCommand::execute() {
 }
 // <---------- END QuitCommand ------------>
 
+// <---------- START HeadCommand ------------>
+HeadCommand::HeadCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
+void HeadCommand::execute() {
+    if(args_length < 3) {
+        std::cerr << "smash error: head: not enough arguments\n";
+        return;
+    }
+    else {
+        int line_numbers = abs(atoi(args[1]));
+        int open_fd = open(args[2], O_RDONLY, 0666);
+        if (open_fd == -1) {
+            perror("smash error: open failed");
+            return;
+        }
+        int size = 3000;
+        char* buff = (char*) malloc(size);
+        double lines = 0;
+        int i =0;
+        int round = 1;
+        int status = read(open_fd, &buff[i], 1);
+        if(status == -1) {
+            perror("smash error: read failed");
+        }
+        if(buff[i] == '\n') {
+            lines = lines + 1;
+        }
+        while(status == 1) {
+            i++;
+            if(i/round == size) {
+                round = round +1;
+                buff = (char*)realloc(buff, size*round); // they said almost no limitations on line length (MAX_INT) so array won't work.
+            }
+            status = read(open_fd, &buff[i], 1);
+            if(status == -1) {
+                perror("smash error: read failed");
+                free(buff);
+                return;
+            }
+            if(buff[i] == '\n' || buff[i] == 0x0) {
+                lines = lines + 1;
+            }
+            if(lines == line_numbers) {
+                break;
+            }
+        }
+        for (int j = 0; j < i+1; ++j) {
+            std::cout << buff[j];
+        }
+        free(buff);
+    }
+}
+// <---------- END HeadCommand ------------>
+
 // <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
 SmallShell::~SmallShell() {}
@@ -772,6 +841,9 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     else if (firstWord.compare("quit") == 0) {
         return new QuitCommand(cmd_line, &jobs_list);
     }
+    else if (firstWord.compare("head") == 0) {
+        return new HeadCommand(cmd_line, &jobs_list);
+    }
     else {
         bool isBackground = _isBackgroundComamnd(cmd_line);
         pid_t pid = fork();
@@ -796,10 +868,18 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    if (_isPipeCommand(cmd_line)) {
+    int pipe_status = _isPipeCommand(cmd_line);
+    if (pipe_status > 0) { // pipe
         std::string left;
         std::string right;
         _splitPipeCommands(cmd_line, &left, &right);
+        int pipe_write_channel;
+        if (pipe_status == 1) {
+            pipe_write_channel = STDOUT_FILENO;
+        }
+        else { // pipe_status==2
+            pipe_write_channel = STDERR_FILENO;
+        }
         int pipe_arr[2] = {0};
         pid_t pid = fork();
         if (pid == 0) { //child
@@ -811,7 +891,7 @@ void SmallShell::executeCommand(const char *cmd_line) {
                 pid_t pipe_pid = fork();
                 if (pipe_pid == 0) { //child - left command - write
                     setpgrp();
-                    if (dup2(pipe_arr[1], STDOUT_FILENO) == -1) {
+                    if (dup2(pipe_arr[1], pipe_write_channel) == -1) {
                         perror("smash error: dup2 failed");
                     }
                     else {
@@ -824,7 +904,7 @@ void SmallShell::executeCommand(const char *cmd_line) {
                     if (close(pipe_arr[1]) == -1) {
                         perror("smash error: close failed");
                     }
-                    if (close(STDOUT_FILENO) == -1) {
+                    if (close(pipe_write_channel) == -1) {
                         perror("smash error: close failed");
                     }
                 } else if (pipe_pid > 0) { //parent - right command - read

@@ -173,12 +173,12 @@ class BackgroundCommand : public BuiltInCommand {
 };
 
 class HeadCommand : public BuiltInCommand {
- public:
-  HeadCommand(const char* cmd_line);
-  virtual ~HeadCommand() {}
-  void execute() override;
+    JobsList* jobs;
+public:
+    HeadCommand(const char* cmd_line, JobsList* jobs);
+    virtual ~HeadCommand() {}
+    void execute() override;
 };
-
 
 class SmallShell {
  private:
