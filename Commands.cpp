@@ -55,6 +55,36 @@ int _parseCommandLine(const char* cmd_line, char** args) {
     FUNC_EXIT()
 }
 
+int _isPipeCommand(const char* cmd_line) {
+    const string cmd_line_copy(cmd_line);
+    std::string pipe_sign1 = " | ";
+    std::string pipe_sign2 = " |& ";
+    if (cmd_line_copy.find(pipe_sign1) != std::string::npos) {
+        return 1; // pipe cout
+    }
+    if (cmd_line_copy.find(pipe_sign2) != std::string::npos) {
+        return 2; // pipe cerr
+    }
+    return 0; // no pipe
+}
+
+void _splitPipeCommands(const char* cmd_line, std::string* left, std::string* right) {
+    const string cmd_line_copy(cmd_line);
+    std::string pipe_sign1 = " | ";
+    std::string pipe_sign2 = " |& ";
+    int pipe = _isPipeCommand(cmd_line);
+    if (pipe == 1) {
+        int pipe_sign_position = cmd_line_copy.find(pipe_sign1);
+        *left = cmd_line_copy.substr(0, pipe_sign_position);
+        *right = cmd_line_copy.substr(pipe_sign_position + 2, strlen(cmd_line));
+    }
+    else { // pipe==2
+        int pipe_sign_position = cmd_line_copy.find(pipe_sign2);
+        *left = cmd_line_copy.substr(0, pipe_sign_position);
+        *right = cmd_line_copy.substr(pipe_sign_position + 3, strlen(cmd_line));
+    }
+}
+
 bool _isBackgroundComamnd(const char* cmd_line) {
     const string str(cmd_line);
     return str[str.find_last_not_of(WHITESPACE)] == '&';
@@ -97,7 +127,7 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
     }
     else if (cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) != std::string::npos) // there is >> and no >
     {
-        *new_cmd_line =  cmd_line_copy.substr(0,file_sign2_position2);
+        *new_cmd_line = cmd_line_copy.substr(0,file_sign2_position2);
         *file_name = _trim(cmd_line_copy.substr(file_sign2_position2+3, strlen(cmd_line)));
         return 1;
     }
@@ -696,14 +726,22 @@ void QuitCommand::execute() {
 // <---------- START HeadCommand ------------>
 HeadCommand::HeadCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void HeadCommand::execute() {
-    if(args_length < 3) {
+    if(args_length < 2) {
         std::cerr << "smash error: head: not enough arguments\n";
         return;
     }
-    else
-    {
-        int line_numbers = abs(atoi(args[1]));
-        int open_fd = open(args[2], O_RDONLY, 0666);
+    else {
+        int line_numbers;
+        int open_fd;
+        if(args_length == 2)
+        {
+            line_numbers = 10; // default value.
+            open_fd = open(args[1], O_RDONLY, 0666);
+        }
+        else{
+            line_numbers = abs(atoi(args[1]));
+            open_fd = open(args[2], O_RDONLY, 0666);
+        }
         if (open_fd == -1) {
             perror("smash error: open failed");
             return;
@@ -714,16 +752,15 @@ void HeadCommand::execute() {
         int i =0;
         int round = 1;
         int status = read(open_fd, &buff[i], 1);
-        if(status == -1)
+        if(status == -1) {
             perror("smash error: read failed");
+        }
         if(buff[i] == '\n') {
             lines = lines + 1;
         }
-        while(status == 1)
-        {
+        while(status == 1) {
             i++;
-            if(i/round == size)
-            {
+            if(i/round == size) {
                 round = round +1;
                 buff = (char*)realloc(buff, size*round); // they said almost no limitations on line length (MAX_INT) so array won't work.
             }
@@ -736,19 +773,30 @@ void HeadCommand::execute() {
             if(buff[i] == '\n' || buff[i] == 0x0) {
                 lines = lines + 1;
             }
-            if(lines == line_numbers)
+            if(lines == line_numbers) {
                 break;
+            }
         }
-        for (int j = 0; j < i+1; ++j) {
-            std::cout << buff[j];
+        if(IO_status == 2)
+        {
+            for (int j = 0; j < i+1; ++j) {
+                std::cout << buff[j];
+            }
         }
+        else
+        {
+            char buff_arr[i+2] = {0};
+            for (int j = 0; j < i+1; ++j) {
+                buff_arr[j] = buff[j];
+            }
+            string buff_str(buff_arr);
+            ChangeIO(IO_status, buff_str.c_str(), strlen(buff_str.c_str()));
+        }
+
         free(buff);
     }
 }
-
 // <---------- END HeadCommand ------------>
-
-
 
 // <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
@@ -824,20 +872,17 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         if (pid == 0) { //child
             setpgrp();
             return new ExternalCommand(cmd_line, &jobs_list);
-        }
-        else if (pid > 0) { //parent
+        } else if (pid > 0) { //parent
             if (isBackground == false) {
                 pid_t wait_status = waitpid(pid, NULL, 0);
                 if (wait_status < 0) {
                     perror("smash error: waitpid failed");
                 }
-            }
-            else {
+            } else {
                 jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
                 jobs_list.addJob(cmd_line, pid, false);
             }
-        }
-        else {
+        } else {
             perror("smash error: fork failed");
         }
     }
@@ -845,9 +890,80 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    Command* cmd = CreateCommand(cmd_line);
-    if (cmd != NULL) {
-        cmd->execute();
+    int pipe_status = _isPipeCommand(cmd_line);
+    if (pipe_status > 0) { // pipe
+        std::string left;
+        std::string right;
+        _splitPipeCommands(cmd_line, &left, &right);
+        int pipe_write_channel;
+        if (pipe_status == 1) {
+            pipe_write_channel = STDOUT_FILENO;
+        }
+        else { // pipe_status==2
+            pipe_write_channel = STDERR_FILENO;
+        }
+        int pipe_arr[2] = {0};
+        pid_t pid = fork();
+        if (pid == 0) { //child
+            setpgrp();
+            if (pipe(pipe_arr) == -1) {
+                perror("smash error: pipe failed");
+            }
+            else {
+                pid_t pipe_pid = fork();
+                if (pipe_pid == 0) { //child - left command - write
+                    setpgrp();
+                    if (dup2(pipe_arr[1], pipe_write_channel) == -1) {
+                        perror("smash error: dup2 failed");
+                    }
+                    else {
+                        if (close(pipe_arr[0]) == -1) {
+                            perror("smash error: close failed");
+                        } else {
+                            executeCommand(left.c_str());
+                        }
+                    }
+                    if (close(pipe_arr[1]) == -1) {
+                        perror("smash error: close failed");
+                    }
+                    if (close(pipe_write_channel) == -1) {
+                        perror("smash error: close failed");
+                    }
+                } else if (pipe_pid > 0) { //parent - right command - read
+                    if (dup2(pipe_arr[0], STDIN_FILENO) == -1) {
+                        perror("smash error: dup2 failed");
+                    }
+                    else {
+                        if (close(pipe_arr[1]) == -1) {
+                            perror("smash error: close failed");
+                        } else {
+                            executeCommand(right.c_str());
+                        }
+                    }
+                    if (close(pipe_arr[0]) == -1) {
+                        perror("smash error: close failed");
+                    }
+                    if (close(STDIN_FILENO) == -1) {
+                        perror("smash error: close failed");
+                    }
+                } else {
+                    perror("smash error: fork failed");
+                }
+            }
+        } else if (pid > 0) { //parent - smash
+            pid_t wait_status = wait(NULL);
+            if (wait_status < 0) {
+                perror("smash error: wait failed");
+            }
+        } else {
+            perror("smash error: fork failed");
+        }
+    }
+    else {
+        Command *cmd = CreateCommand(cmd_line);
+        if (cmd != NULL) {
+            cmd->execute();
+        }
     }
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
