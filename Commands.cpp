@@ -727,24 +727,26 @@ void QuitCommand::execute() {
 HeadCommand::HeadCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void HeadCommand::execute() {
     if(args_length < 2) {
-        std::cerr << "smash error: head: not enough arguments\n";
+        std::cerr << "smash error: head: not enough arguments" << endl;
         return;
     }
     else {
         int line_numbers;
         int open_fd;
-        if(args_length == 2)
-        {
+        if(args_length == 2) {
             line_numbers = 10; // default value.
             open_fd = open(args[1], O_RDONLY, 0666);
         }
-        else{
+        else {
             line_numbers = abs(atoi(args[1]));
             open_fd = open(args[2], O_RDONLY, 0666);
         }
         if (open_fd == -1) {
             perror("smash error: open failed");
             return;
+        }
+        if (line_numbers == 0) {
+            return; // stop if we should not print any lines
         }
         int size = 3000;
         char* buff = (char*) malloc(size);
@@ -777,29 +779,29 @@ void HeadCommand::execute() {
                 break;
             }
         }
-        if(IO_status == 2)
-        {
+        if(IO_status == 2) {
             for (int j = 0; j < i+1; ++j) {
                 std::cout << buff[j];
             }
         }
-        else
-        {
-            char buff_arr[i+2] = {0};
+        else {
+            char* buff_arr = (char*) malloc(i+2);
             for (int j = 0; j < i+1; ++j) {
                 buff_arr[j] = buff[j];
             }
             string buff_str(buff_arr);
             ChangeIO(IO_status, buff_str.c_str(), strlen(buff_str.c_str()));
+            free(buff_arr);
         }
-
         free(buff);
+
     }
 }
 // <---------- END HeadCommand ------------>
 
 // <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
+int SmallShell::curr_process_id = getpid();
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -812,6 +814,9 @@ const char* SmallShell::getLastPwd(){
 }
 int SmallShell::getCurrJobID(){
     return this->curr_job_id;
+}
+int SmallShell::getCurrProcessID(){
+    return this->curr_process_id;
 }
 void SmallShell::setLastPwd(const char* update_last_pwd) {
     this->last_pwd = update_last_pwd;
@@ -874,10 +879,12 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
             return new ExternalCommand(cmd_line, &jobs_list);
         } else if (pid > 0) { //parent
             if (isBackground == false) {
+                this->curr_process_id = pid;
                 pid_t wait_status = waitpid(pid, NULL, 0);
                 if (wait_status < 0) {
                     perror("smash error: waitpid failed");
                 }
+                this->curr_process_id = getpid();
             } else {
                 jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
                 jobs_list.addJob(cmd_line, pid, false);
