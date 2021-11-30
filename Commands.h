@@ -187,13 +187,14 @@ class SmallShell {
     const char* last_pwd;
     bool lastPwdInitialized;
     int curr_job_id;
-    pid_t curr_process_id;
+    static pid_t curr_process_id;
   SmallShell();
  public:
   Command *CreateCommand(const char* cmd_line);
   const char* getPrompt();
   const char* getLastPwd();
   int getCurrJobID();
+  int getCurrProcessID();
   bool isLastPwdInitialized();
   void setPrompt(const char* prompt);
   void setLastPwd(const char* last_pwd);

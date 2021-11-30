@@ -798,7 +798,8 @@ void HeadCommand::execute() {
 // <---------- END HeadCommand ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1), curr_process_id(-1) {}
+SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
+int SmallShell::curr_process_id = -1;
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -811,6 +812,9 @@ const char* SmallShell::getLastPwd(){
 }
 int SmallShell::getCurrJobID(){
     return this->curr_job_id;
+}
+int SmallShell::getCurrProcessID(){
+    return this->curr_process_id;
 }
 void SmallShell::setLastPwd(const char* update_last_pwd) {
     this->last_pwd = update_last_pwd;
@@ -874,6 +878,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
             return new ExternalCommand(cmd_line, &jobs_list);
         } else if (pid > 0) { //parent
             if (isBackground == false) {
+                this->curr_process_id = pid;
                 pid_t wait_status = waitpid(pid, NULL, 0);
                 if (wait_status < 0) {
                     perror("smash error: waitpid failed");
