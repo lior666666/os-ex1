@@ -13,11 +13,14 @@ void ctrlZHandler(int sig_num) {
 
 void ctrlCHandler(int sig_num) {
     SmallShell& smash = SmallShell::getInstance();
-    std::cout << "smash: got ctrl-C" << endl;
-    if (kill(smash.getCurrProcessID(), sig_num) == -1) {
-        perror("smash error: kill failed");
+    if (smash.getCurrProcessID() != getpid()) {
+        std::cout << "smash: got ctrl-C" << endl;
+        if (kill(smash.getCurrProcessID(), sig_num) == -1) {
+            perror("smash error: kill failed");
+        } else {
+            std::cout << "smash: process " << smash.getCurrProcessID() << " was killed" << endl;
+        }
     }
-    std::cout << "smash: process " << smash.getCurrProcessID() << " was killed" << endl;
 }
 
 void alarmHandler(int sig_num) {

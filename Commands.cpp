@@ -799,7 +799,7 @@ void HeadCommand::execute() {
 
 // <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
-int SmallShell::curr_process_id = -1;
+int SmallShell::curr_process_id = getpid();
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -874,7 +874,6 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         pid_t pid = fork();
         if (pid == 0) { //child
             setpgrp();
-            this->curr_process_id = getpid();
             return new ExternalCommand(cmd_line, &jobs_list);
         } else if (pid > 0) { //parent
             if (isBackground == false) {
@@ -883,6 +882,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
                 if (wait_status < 0) {
                     perror("smash error: waitpid failed");
                 }
+                this->curr_process_id = getpid();
             } else {
                 jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
                 jobs_list.addJob(cmd_line, pid, false);
