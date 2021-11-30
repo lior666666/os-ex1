@@ -2,6 +2,8 @@
 #include <signal.h>
 #include "signals.h"
 #include "Commands.h"
+#include <sys/wait.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -10,7 +12,12 @@ void ctrlZHandler(int sig_num) {
 }
 
 void ctrlCHandler(int sig_num) {
-  // TODO: Add your implementation
+    std::cout << "smash: got ctrl-C" << endl;
+    pid_t pid = getpid();
+    if (kill(pid, sig_num) == -1) {
+        perror("smash error: kill failed");
+    }
+    std::cout << "smash: process " << pid << " was killed" << endl;
 }
 
 void alarmHandler(int sig_num) {

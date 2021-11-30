@@ -798,7 +798,7 @@ void HeadCommand::execute() {
 // <---------- END HeadCommand ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
+SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1), curr_process_id(-1) {}
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -870,6 +870,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         pid_t pid = fork();
         if (pid == 0) { //child
             setpgrp();
+            this->curr_process_id = getpid();
             return new ExternalCommand(cmd_line, &jobs_list);
         } else if (pid > 0) { //parent
             if (isBackground == false) {
