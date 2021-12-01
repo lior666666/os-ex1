@@ -54,7 +54,12 @@ int _parseCommandLine(const char* cmd_line, char** args) {
     return i;
     FUNC_EXIT()
 }
-
+bool _isTimeCommand(const char* cmd_line){
+    char* tmp_args[COMMAND_MAX_ARGS];
+    _parseCommandLine(cmd_line, tmp_args);
+     std::string str(tmp_args[0]);
+    return (strcmp("timeout",str.c_str()) == 0);
+}
 int _isPipeCommand(const char* cmd_line) {
     const string cmd_line_copy(cmd_line);
     std::string pipe_sign1 = " | ";
@@ -67,7 +72,6 @@ int _isPipeCommand(const char* cmd_line) {
     }
     return 0; // no pipe
 }
-
 void _splitPipeCommands(const char* cmd_line, std::string* left, std::string* right) {
     const string cmd_line_copy(cmd_line);
     std::string pipe_sign1 = " | ";
@@ -88,6 +92,15 @@ void _splitPipeCommands(const char* cmd_line, std::string* left, std::string* ri
 bool _isBackgroundComamnd(const char* cmd_line) {
     const string str(cmd_line);
     return str[str.find_last_not_of(WHITESPACE)] == '&';
+}
+
+std::string removeTimeOut(const char* cmd_line, char* arg){
+    string str(cmd_line);
+    string str_arg(arg);
+    string sub_str = str.substr(str.find("timeout")+7, str.length());
+    const string sub_str2 = sub_str.substr(sub_str.find(arg) + str_arg.length(), sub_str.length());
+    sub_str = _ltrim(sub_str2);
+    return sub_str.c_str();
 }
 
 int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
@@ -112,12 +125,12 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
     else if (cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) == std::string::npos) { // there is no >> and no >
         std::string file_sign1_last = " >";
         std::string file_sign2_last = " >>";
-        if(cmd_line_copy.find(file_sign2_last) == cmd_line_copy.length()-3) { // if the last sub-string is " >>"
+        if(strlen(cmd_line)>3 && cmd_line_copy.find(file_sign2_last) == cmd_line_copy.length()-3) { // if the last sub-string is " >>"
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-3);
             *file_name = _trim(cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length()));
             return 1;
         }
-        if(cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) { // if the last sub-string is is " >"
+        if(strlen(cmd_line)>2 &&cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) { // if the last sub-string is is " >"
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-2);
             *file_name = _trim(cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length()));
             return 0;
@@ -809,6 +822,12 @@ const char* SmallShell::getPrompt(){
 void SmallShell::setPrompt(const char* prompt){
     this->prompt = prompt;
 }
+std::vector<JobEntry>* SmallShell::getTimeJobVec(){
+    return &this->time_jobs_vec;
+}
+JobsList* SmallShell::getJobsList() {
+    return &this->jobs_list;
+}
 const char* SmallShell::getLastPwd(){
     return this->last_pwd;
 }
@@ -895,7 +914,9 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     }
     return nullptr;
 }
-
+const char* SmallShell::getLastCmd(){
+    return last_cmd.c_str();
+}
 void SmallShell::executeCommand(const char *cmd_line) {
     int pipe_status = _isPipeCommand(cmd_line);
     if (pipe_status > 0) { // pipe
@@ -967,9 +988,21 @@ void SmallShell::executeCommand(const char *cmd_line) {
         }
     }
     else {
-        Command *cmd = CreateCommand(cmd_line);
-        if (cmd != NULL) {
-            cmd->execute();
+
+        if (_isTimeCommand(cmd_line) && !_isBackgroundComamnd(cmd_line))
+        {
+            char* tmp_args[COMMAND_MAX_ARGS];
+            _parseCommandLine(cmd_line,tmp_args);
+            std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
+            alarm(atoi(tmp_args[1]));
+            last_cmd = new_cmd_line;
+            executeCommand(new_cmd_line.c_str());
+        }
+        else {
+            Command *cmd = CreateCommand(cmd_line);
+            if (cmd != NULL) {
+                cmd->execute();
+            }
         }
     }
     // Please note that you must fork smash process for some commands (e.g., external commands....)

@@ -23,6 +23,14 @@ void ctrlCHandler(int sig_num) {
     }
 }
 
-void alarmHandler(int sig_num) {
-    // TODO: Add your implementation
+void alarmHandler(int signum) {
+    write(STDOUT_FILENO,"smash: got an alarm\n", 20);
+    SmallShell& smash = SmallShell::getInstance();
+    if (smash.getCurrProcessID() != getpid()) {
+        if (kill(smash.getCurrProcessID(), 9) == -1) {
+            perror("smash error: kill failed");
+        } else {
+            std::cout <<"smash: " << smash.getLastCmd() << " timed out!" << endl;
+        }
+    }
 }

@@ -57,6 +57,8 @@ protected:
     std::string file_name;
     int IO_status;
     int args_length;
+    bool is_time_out;
+    int time_arg;
 public:
     Command(const char* cmd_line);
     const char* getCmdLine();
@@ -183,18 +185,24 @@ public:
 class SmallShell {
 private:
     JobsList jobs_list;
+    std::vector<JobEntry> time_jobs_vec;
     const char* prompt;
     const char* last_pwd;
     bool lastPwdInitialized;
+    std::string last_cmd;
     int curr_job_id;
     static pid_t curr_process_id;
     SmallShell();
 public:
     Command *CreateCommand(const char* cmd_line);
+    JobsList* getJobsList();
     const char* getPrompt();
     const char* getLastPwd();
+    const char* getLastCmd();
+    void setLastCmd(const char* cmd_line);
     int getCurrJobID();
     int getCurrProcessID();
+    std::vector<JobEntry>* getTimeJobVec();
     bool isLastPwdInitialized();
     void setPrompt(const char* prompt);
     void setLastPwd(const char* last_pwd);
