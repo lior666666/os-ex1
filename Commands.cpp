@@ -232,8 +232,14 @@ JobsList::JobsList() {
 JobsList::~JobsList() {
     delete jobs_vec;
 }
-void JobsList::addJob(const char* cmd_line, pid_t pid, bool isStopped) {
-    JobEntry* job = new JobEntry(max_job_id+1, strdup(cmd_line), pid, time(NULL), isStopped);
+void JobsList::addJob(int job_id, const char* cmd_line, pid_t pid, bool isStopped) {
+    JobEntry* job;
+    if (job_id == -1) { // new job (not return from fg)
+        job = new JobEntry(max_job_id + 1, strdup(cmd_line), pid, time(NULL), isStopped);
+    }
+    else {
+        job = new JobEntry(job_id, strdup(cmd_line), pid, time(NULL), isStopped);
+    }
     jobs_vec->push_back(*job);
     updateMaxJobID();
     updateMaxStoppedJobID();
@@ -325,7 +331,7 @@ int JobsList::getMaxJobID() {
 int JobsList::getMaxStoppedJobID() {
     return max_stopped_jod_id;
 }
-void JobsList::turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd) {
+void JobsList::turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd, SmallShell* smash) {
     if (bg_or_stopped_job == NULL) { // something wrong!!
         std::cerr << "something wrong!!" << endl;
     }
@@ -352,11 +358,17 @@ void JobsList::turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd) {
             perror("smash error: kill failed");
             return;
         }
-        pid_t wait_status = waitpid(job_pid, NULL, 0);
+        smash->setCurrProcessID(job_pid);
+        smash->setCurrJobID(bg_or_stopped_job->getJobID());
+        smash->setCurrCmdLine(bg_or_stopped_job->getCmdLine());
+        pid_t wait_status = waitpid(job_pid, NULL, WUNTRACED);
         if (wait_status < 0) {
             perror("smash error: waitpid failed");
             return;
         }
+        smash->setCurrProcessID(getpid());
+        smash->setCurrJobID(-1);
+        smash->setCurrCmdLine(NULL);
         removeJobByProcessId(job_pid); //remove from vec
         updateMaxJobID();
         updateMaxStoppedJobID();
@@ -634,14 +646,14 @@ void KillCommand::execute() {
                     free(s_signal);
                     free(spid);
                 }
-                if(abs(atoi(args[1])) == 19)
-                {
-                    job_to_send_signal->setIsStopped(true);
-                }
-                else if(abs(atoi(args[1])) == 18)
-                {
-                    job_to_send_signal->setIsStopped(false);
-                }
+//                if(abs(atoi(args[1])) == 19)
+//                {
+//                    job_to_send_signal->setIsStopped(true);
+//                }
+//                else if(abs(atoi(args[1])) == 18)
+//                {
+//                    job_to_send_signal->setIsStopped(false);
+//                }
             }
             else {
                 perror("smash error: kill failed");
@@ -652,7 +664,7 @@ void KillCommand::execute() {
 // <---------- END KillCommand ------------>
 
 // <---------- START ForegroundCommand ------------>
-ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
+ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs, SmallShell* smash) : BuiltInCommand(cmd_line), jobs(jobs), smash(smash) {}
 void ForegroundCommand::execute() {
     jobs->removeFinishedJobs();
     if (args_length > 2) { // more than 1 arg
@@ -665,7 +677,7 @@ void ForegroundCommand::execute() {
             std::cerr << "smash error: fg: job-id " << atoi(args[1]) << " does not exist" << endl;
             return;
         }
-        jobs->turnToForeground(bg_or_stopped_job, this);
+        jobs->turnToForeground(bg_or_stopped_job, this, smash);
     }
     else { // zero arg
         if (jobs->isVecEmpty()) { // there is no jobs in the vec
@@ -673,7 +685,7 @@ void ForegroundCommand::execute() {
             return;
         }
         JobEntry* bg_or_stopped_job = jobs->getJobById(jobs->getMaxJobID());
-        jobs->turnToForeground(bg_or_stopped_job, this);
+        jobs->turnToForeground(bg_or_stopped_job, this, smash);
     }
 }
 // <---------- END ForegroundCommand ------------>
@@ -739,14 +751,14 @@ void HeadCommand::execute() {
         }
         else {
             line_numbers = abs(atoi(args[1]));
-            if (line_numbers == 0) {
-                return; // stop if we should not print any lines
-            }
             open_fd = open(args[2], O_RDONLY, 0666);
         }
         if (open_fd == -1) {
             perror("smash error: open failed");
             return;
+        }
+        if (line_numbers == 0) {
+            return; // stop if we should not print any lines
         }
         int size = 3000;
         char* buff = (char*) malloc(size);
@@ -785,12 +797,13 @@ void HeadCommand::execute() {
             }
         }
         else {
-            char buff_arr[i+2] = {0};
+            char* buff_arr = (char*) malloc(i+2);
             for (int j = 0; j < i+1; ++j) {
                 buff_arr[j] = buff[j];
             }
             string buff_str(buff_arr);
             ChangeIO(IO_status, buff_str.c_str(), strlen(buff_str.c_str()));
+            free(buff_arr);
         }
         free(buff);
     }
@@ -798,9 +811,15 @@ void HeadCommand::execute() {
 // <---------- END HeadCommand ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
+SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false) {}
 int SmallShell::curr_process_id = getpid();
+int SmallShell::curr_job_id = -1;
+JobsList SmallShell::jobs_list = *(new JobsList());
+const char* SmallShell::curr_cmd_line = NULL;
 SmallShell::~SmallShell() {}
+JobsList SmallShell::getJobsList() {
+    return this->jobs_list;
+}
 const char* SmallShell::getPrompt(){
     return this->prompt;
 }
@@ -816,11 +835,20 @@ int SmallShell::getCurrJobID(){
 int SmallShell::getCurrProcessID(){
     return this->curr_process_id;
 }
+const char* SmallShell::getCurrCmdLine() {
+    return this->curr_cmd_line;
+}
 void SmallShell::setLastPwd(const char* update_last_pwd) {
     this->last_pwd = update_last_pwd;
 }
 void SmallShell::setCurrJobID(int job_id) {
     this->curr_job_id = job_id;
+}
+void SmallShell::setCurrProcessID(int pid) {
+    this->curr_process_id = pid;
+}
+void SmallShell::setCurrCmdLine(const char* cmd_line) {
+    this->curr_cmd_line = cmd_line;
 }
 bool SmallShell::isLastPwdInitialized() {
     return this->lastPwdInitialized;
@@ -858,7 +886,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         return new KillCommand(cmd_line, &jobs_list);
     }
     else if (firstWord.compare("fg") == 0) {
-        return new ForegroundCommand(cmd_line, &jobs_list);
+        return new ForegroundCommand(cmd_line, &jobs_list, this);
     }
     else if (firstWord.compare("bg") == 0) {
         return new BackgroundCommand(cmd_line, &jobs_list);
@@ -878,14 +906,18 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         } else if (pid > 0) { //parent
             if (isBackground == false) {
                 this->curr_process_id = pid;
-                pid_t wait_status = waitpid(pid, NULL, 0);
+                this->curr_cmd_line = cmd_line;
+                this->curr_job_id = -1;
+                pid_t wait_status = waitpid(pid, NULL, WUNTRACED);
                 if (wait_status < 0) {
                     perror("smash error: waitpid failed");
                 }
                 this->curr_process_id = getpid();
+                this->curr_cmd_line = NULL;
+                this->curr_job_id = -1;
             } else {
                 jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
-                jobs_list.addJob(cmd_line, pid, false);
+                jobs_list.addJob(-1, cmd_line, pid, false);
             }
         } else {
             perror("smash error: fork failed");
