@@ -174,8 +174,8 @@ void _removeBackgroundSign(char* cmd_line) {
 }
 
 // <---------- START JobEntry ------------>
-JobEntry::JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped) :
-        job_id(job_id), cmd_line(cmd_line), process_id(process_id), time_inserted(time_inserted), isStopped(isStopped) {}
+JobEntry::JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped, int time_up) :
+        job_id(job_id), cmd_line(cmd_line), process_id(process_id), time_inserted(time_inserted), isStopped(isStopped),time_up(time_up) {}
 JobEntry::~JobEntry() {}
 void JobEntry::printJob(Command* cmd, int IO_status) {
     if(IO_status == 2) {
@@ -225,8 +225,14 @@ pid_t JobEntry::getProcessID() {
 int JobEntry::getJobID() {
     return this->job_id;
 }
+int JobEntry::getTimeUp(){
+    return this->time_up;
+}
 bool JobEntry::isStoppedProcess() {
     return this->isStopped;
+}
+time_t JobEntry::getTImeInserted(){
+    return this->time_inserted;
 }
 const char* JobEntry::getCmdLine() {
     return this->cmd_line;
@@ -246,7 +252,7 @@ JobsList::~JobsList() {
     delete jobs_vec;
 }
 void JobsList::addJob(const char* cmd_line, pid_t pid, bool isStopped) {
-    JobEntry* job = new JobEntry(max_job_id+1, strdup(cmd_line), pid, time(NULL), isStopped);
+    JobEntry* job = new JobEntry(max_job_id+1, strdup(cmd_line), pid, time(NULL), isStopped, -1);
     jobs_vec->push_back(*job);
     updateMaxJobID();
     updateMaxStoppedJobID();
@@ -849,6 +855,10 @@ bool SmallShell::isLastPwdInitialized() {
 void SmallShell::changeLastPwdStatus() {
     this->lastPwdInitialized = true;
 }
+const char* SmallShell::getLastCmd(){
+    return last_cmd.c_str();
+}
+
 // <---------- END SmallShell ------------>
 
 
@@ -895,6 +905,14 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         pid_t pid = fork();
         if (pid == 0) { //child
             setpgrp();
+            if (_isTimeCommand(cmd_line))
+            {
+                char* tmp_args[COMMAND_MAX_ARGS];
+                _parseCommandLine(cmd_line,tmp_args);
+                std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
+                alarm(atoi(tmp_args[1]));
+                return new ExternalCommand(new_cmd_line.c_str(), &jobs_list);
+            }
             return new ExternalCommand(cmd_line, &jobs_list);
         } else if (pid > 0) { //parent
             if (isBackground == false) {
@@ -905,8 +923,16 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
                 }
                 this->curr_process_id = getpid();
             } else {
+//                alarm(time_up);
                 jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
                 jobs_list.addJob(cmd_line, pid, false);
+                if (_isTimeCommand(cmd_line))
+                {
+                    char* tmp_args[COMMAND_MAX_ARGS];
+                    _parseCommandLine(cmd_line,tmp_args);
+                    JobEntry* job = new JobEntry(-1, strdup(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
+                    time_jobs_vec.push_back(*job);
+                }
             }
         } else {
             perror("smash error: fork failed");
@@ -914,9 +940,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
     }
     return nullptr;
 }
-const char* SmallShell::getLastCmd(){
-    return last_cmd.c_str();
-}
+
 void SmallShell::executeCommand(const char *cmd_line) {
     int pipe_status = _isPipeCommand(cmd_line);
     if (pipe_status > 0) { // pipe
@@ -999,6 +1023,12 @@ void SmallShell::executeCommand(const char *cmd_line) {
             executeCommand(new_cmd_line.c_str());
         }
         else {
+            if (_isTimeCommand(cmd_line))
+            {
+                char* tmp_args[COMMAND_MAX_ARGS];
+                _parseCommandLine(cmd_line,tmp_args);
+                alarm(atoi(tmp_args[1]));
+            }
             Command *cmd = CreateCommand(cmd_line);
             if (cmd != NULL) {
                 cmd->execute();

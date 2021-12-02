@@ -14,12 +14,15 @@ class JobEntry {
     pid_t process_id;
     time_t time_inserted;
     bool isStopped;
+    int time_up;
 public:
-    JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped);
+    JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped, int time_up);
     ~JobEntry();
     void printJob(Command* cmd, int IO_status);
     int getJobID();
     pid_t getProcessID();
+    time_t getTImeInserted();
+    int getTimeUp();
     bool isStoppedProcess();
     void setIsStopped(bool setStopped);
     const char* getCmdLine();

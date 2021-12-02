@@ -26,11 +26,27 @@ void ctrlCHandler(int sig_num) {
 void alarmHandler(int signum) {
     write(STDOUT_FILENO,"smash: got an alarm\n", 20);
     SmallShell& smash = SmallShell::getInstance();
+    vector<JobEntry>::iterator it;
+    for(it = smash.getTimeJobVec()->begin(); it != smash.getTimeJobVec()->end(); it++) {
+        if (difftime(time(NULL), it->getTImeInserted()) == it->getTimeUp()) {
+            if (kill(it->getProcessID(), 9) == -1) {
+                perror("smash error: kill failed");
+                return;
+            }
+            else {
+                std::cout << "smash: " << it->getCmdLine() << " timed out!" << endl;
+                return;
+            }
+        }
+    }
     if (smash.getCurrProcessID() != getpid()) {
         if (kill(smash.getCurrProcessID(), 9) == -1) {
             perror("smash error: kill failed");
-        } else {
-            std::cout <<"smash: " << smash.getLastCmd() << " timed out!" << endl;
+        }
+        else {
+            std::cout << "smash: " << smash.getLastCmd() << " timed out!" << endl;
         }
     }
 }
+
+
