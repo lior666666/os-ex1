@@ -184,13 +184,13 @@ public:
 
 class SmallShell {
  private:
-    static JobsList jobs_list;
+    JobsList jobs_list;
     const char* prompt;
     const char* last_pwd;
     bool lastPwdInitialized;
-    static int curr_job_id;
-    static const char* curr_cmd_line;
-    static pid_t curr_process_id;
+    int curr_job_id;
+    const char* curr_cmd_line;
+    pid_t curr_process_id;
   SmallShell();
  public:
   Command *CreateCommand(const char* cmd_line);

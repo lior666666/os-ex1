@@ -9,27 +9,31 @@ using namespace std;
 
 void ctrlZHandler(int sig_num) {
     SmallShell& smash = SmallShell::getInstance();
+    std::cout << "smash: got ctrl-Z" << endl;
     if (smash.getCurrProcessID() != getpid()) {
-        std::cout << "smash: got ctrl-Z" << endl;
         //add to vec
         JobsList vec = smash.getJobsList();
         vec.removeFinishedJobs();
         vec.addJob(smash.getCurrJobID(), smash.getCurrCmdLine(), smash.getCurrProcessID(), true);
         vec.updateMaxJobID();
         vec.updateMaxStoppedJobID();
-        if (kill(smash.getCurrProcessID(), 19) == -1) {
+        (smash.CreateCommand("jobs"))->execute();
+        if (kill(smash.getCurrProcessID(), SIGSTOP) == -1) {
             perror("smash error: kill failed");
         } else {
             std::cout << "smash: process " << smash.getCurrProcessID() << " was stopped" << endl;
         }
+        (smash.CreateCommand("jobs"))->execute();
     }
+    std::cout << "*****pid: " << getpid() << endl;
+    (smash.CreateCommand("jobs"))->execute();
 }
 
 void ctrlCHandler(int sig_num) {
     SmallShell& smash = SmallShell::getInstance();
+    std::cout << "smash: got ctrl-C" << endl;
     if (smash.getCurrProcessID() != getpid()) {
-        std::cout << "smash: got ctrl-C" << endl;
-        if (kill(smash.getCurrProcessID(), 9) == -1) {
+        if (kill(smash.getCurrProcessID(), SIGKILL) == -1) {
             perror("smash error: kill failed");
         } else {
             std::cout << "smash: process " << smash.getCurrProcessID() << " was killed" << endl;

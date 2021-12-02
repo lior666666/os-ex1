@@ -112,12 +112,12 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
     else if (cmd_line_copy.find(file_sign1) == std::string::npos && cmd_line_copy.find(file_sign2) == std::string::npos) { // there is no >> and no >
         std::string file_sign1_last = " >";
         std::string file_sign2_last = " >>";
-        if(cmd_line_copy.find(file_sign2_last) == cmd_line_copy.length()-3) { // if the last sub-string is " >>"
+        if(strlen(cmd_line)>3 && cmd_line_copy.find(file_sign2_last) == cmd_line_copy.length()-3) { // if the last sub-string is " >>"
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-3);
             *file_name = _trim(cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length()));
             return 1;
         }
-        if(cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) { // if the last sub-string is is " >"
+        if(strlen(cmd_line)>2 && cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) { // if the last sub-string is is " >"
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-2);
             *file_name = _trim(cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length()));
             return 0;
@@ -249,6 +249,7 @@ void JobsList::printJobsList(Command* cmd, int IO_status) {
     bool first_print = true;
     for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
         if (IO_status == 2) {
+            std::cout << "**try to print the vec with size: " << jobs_vec->size() << endl;
             it->printJob(cmd, IO_status);
             first_print = false;
         }
@@ -646,14 +647,6 @@ void KillCommand::execute() {
                     free(s_signal);
                     free(spid);
                 }
-//                if(abs(atoi(args[1])) == 19)
-//                {
-//                    job_to_send_signal->setIsStopped(true);
-//                }
-//                else if(abs(atoi(args[1])) == 18)
-//                {
-//                    job_to_send_signal->setIsStopped(false);
-//                }
             }
             else {
                 perror("smash error: kill failed");
@@ -812,10 +805,10 @@ void HeadCommand::execute() {
 
 // <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false) {}
-int SmallShell::curr_process_id = getpid();
-int SmallShell::curr_job_id = -1;
-JobsList SmallShell::jobs_list = *(new JobsList());
-const char* SmallShell::curr_cmd_line = NULL;
+//int SmallShell::curr_process_id = getpid();
+//int SmallShell::curr_job_id = -1;
+//JobsList SmallShell::jobs_list = *(new JobsList());
+//const char* SmallShell::curr_cmd_line = NULL;
 SmallShell::~SmallShell() {}
 JobsList SmallShell::getJobsList() {
     return this->jobs_list;
