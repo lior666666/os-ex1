@@ -858,10 +858,19 @@ void SmallShell::changeLastPwdStatus() {
 const char* SmallShell::getLastCmd(){
     return last_cmd.c_str();
 }
-
+int SmallShell::findMinAlarm(){
+    if(time_jobs_vec.empty())
+        return -1;
+    vector<JobEntry>::iterator it;
+    vector<JobEntry>::iterator min = time_jobs_vec.begin();
+    for(it = time_jobs_vec.begin(); it != time_jobs_vec.end(); it++) {
+        if (it->getTimeUp() - difftime(time(NULL), it->getTImeInserted()) < min->getTimeUp() - difftime(time(NULL), min->getTImeInserted())) {
+           min = it;
+        }
+    }
+    return (min->getTimeUp() - difftime(time(NULL), min->getTImeInserted()));
+}
 // <---------- END SmallShell ------------>
-
-
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
@@ -910,7 +919,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
                 char* tmp_args[COMMAND_MAX_ARGS];
                 _parseCommandLine(cmd_line,tmp_args);
                 std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
-                alarm(atoi(tmp_args[1]));
+                //alarm(atoi(tmp_args[1]));
                 return new ExternalCommand(new_cmd_line.c_str(), &jobs_list);
             }
             return new ExternalCommand(cmd_line, &jobs_list);
@@ -932,6 +941,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
                     _parseCommandLine(cmd_line,tmp_args);
                     JobEntry* job = new JobEntry(-1, strdup(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
                     time_jobs_vec.push_back(*job);
+                    alarm(findMinAlarm());
                 }
             }
         } else {
@@ -1023,12 +1033,14 @@ void SmallShell::executeCommand(const char *cmd_line) {
             executeCommand(new_cmd_line.c_str());
         }
         else {
-            if (_isTimeCommand(cmd_line))
-            {
-                char* tmp_args[COMMAND_MAX_ARGS];
-                _parseCommandLine(cmd_line,tmp_args);
-                alarm(atoi(tmp_args[1]));
-            }
+//            if (_isTimeCommand(cmd_line))
+//            {
+//                char* tmp_args[COMMAND_MAX_ARGS];
+//                _parseCommandLine(cmd_line,tmp_args);
+//                JobEntry* job = new JobEntry(-1, strdup(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
+//                time_jobs_vec.push_back(*job);
+//                alarm(findMinAlarm());
+//            }
             Command *cmd = CreateCommand(cmd_line);
             if (cmd != NULL) {
                 cmd->execute();

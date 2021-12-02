@@ -205,6 +205,7 @@ public:
     void setLastCmd(const char* cmd_line);
     int getCurrJobID();
     int getCurrProcessID();
+    int findMinAlarm();
     std::vector<JobEntry>* getTimeJobVec();
     bool isLastPwdInitialized();
     void setPrompt(const char* prompt);
