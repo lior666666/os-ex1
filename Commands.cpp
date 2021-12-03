@@ -852,11 +852,7 @@ void HeadCommand::execute() {
 // <---------- END HeadCommand ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false) {}
-//int SmallShell::curr_process_id = getpid();
-//int SmallShell::curr_job_id = -1;
-//JobsList SmallShell::jobs_list = *(new JobsList());
-//const char* SmallShell::curr_cmd_line = NULL;
+SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_process_id(getpid()) {}
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
