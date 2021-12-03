@@ -132,8 +132,9 @@ class GetCurrDirCommand : public BuiltInCommand {
 };
 
 class ShowPidCommand : public BuiltInCommand {
+    SmallShell* smash;
  public:
-  ShowPidCommand(const char* cmd_line);
+  ShowPidCommand(const char* cmd_line, SmallShell* smash);
   virtual ~ShowPidCommand() {}
   void execute() override;
 };
@@ -198,6 +199,7 @@ class SmallShell {
     std::string last_cmd;
     const char* curr_cmd_line;
     pid_t curr_process_id;
+    pid_t smash_pid;
   SmallShell();
  public:
   Command *CreateCommand(const char* cmd_line);
@@ -208,6 +210,7 @@ class SmallShell {
   void setLastCmd(const char* cmd_line);
   int getCurrJobID();
   int getCurrProcessID();
+  int getSmashPid();
   const char* getCurrCmdLine();
   int findMinAlarm();
   std::vector<JobEntry>* getTimeJobVec();

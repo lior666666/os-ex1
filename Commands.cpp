@@ -567,10 +567,10 @@ void ChangePromptCommand::execute() {
 // <---------- END ChangePromptCommand ------------>
 
 // <---------- START ShowPidCommand ------------>
-ShowPidCommand::ShowPidCommand(const char* cmd_line): BuiltInCommand(cmd_line) {}
+ShowPidCommand::ShowPidCommand(const char* cmd_line, SmallShell* smash) : BuiltInCommand(cmd_line), smash(smash) {}
 void ShowPidCommand::execute(){
     if (IO_status == 2) {
-        std::cout << "smash pid is " << getpid() << endl;  // need to check if that is the proper way.
+        std::cout << "smash pid is " << smash->getSmashPid() << endl;  // need to check if that is the proper way.
     }
     else {
         string buff = "smash pid is ";
@@ -842,7 +842,7 @@ void HeadCommand::execute() {
 // <---------- END HeadCommand ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_process_id(getpid()) {}
+SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_process_id(getpid()), smash_pid(getpid()) {}
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -861,6 +861,9 @@ char* SmallShell::getLastPwd(){
 }
 int SmallShell::getCurrJobID(){
     return this->curr_job_id;
+}
+int SmallShell::getSmashPid(){
+    return this->smash_pid;
 }
 int SmallShell::getCurrProcessID(){
     return this->curr_process_id;
@@ -917,7 +920,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         return new ChangePromptCommand(cmd_line, this);
     }
     else if (firstWord.compare("showpid") == 0) {
-        return new ShowPidCommand(cmd_line);
+        return new ShowPidCommand(cmd_line, this);
     }
     else if (firstWord.compare("pwd") == 0) {
         return new GetCurrDirCommand(cmd_line);
