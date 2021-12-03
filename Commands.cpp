@@ -54,12 +54,14 @@ int _parseCommandLine(const char* cmd_line, char** args) {
     return i;
     FUNC_EXIT()
 }
+
 bool _isTimeCommand(const char* cmd_line){
     char* tmp_args[COMMAND_MAX_ARGS];
     _parseCommandLine(cmd_line, tmp_args);
-     std::string str(tmp_args[0]);
+    std::string str(tmp_args[0]);
     return (strcmp("timeout",str.c_str()) == 0);
 }
+
 int _isPipeCommand(const char* cmd_line) {
     const string cmd_line_copy(cmd_line);
     std::string pipe_sign1 = " | ";
@@ -72,6 +74,7 @@ int _isPipeCommand(const char* cmd_line) {
     }
     return 0; // no pipe
 }
+
 void _splitPipeCommands(const char* cmd_line, std::string* left, std::string* right) {
     const string cmd_line_copy(cmd_line);
     std::string pipe_sign1 = " | ";
@@ -130,7 +133,7 @@ int checkForFile(const char* cmd_line, string* new_cmd_line , string* file_name)
             *file_name = _trim(cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length()));
             return 1;
         }
-        if(strlen(cmd_line)>2 &&cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) { // if the last sub-string is is " >"
+        if(strlen(cmd_line)>2 && cmd_line_copy.find(file_sign1_last) == cmd_line_copy.length()-2) { // if the last sub-string is is " >"
             *new_cmd_line =  cmd_line_copy.substr(0,cmd_line_copy.length()-2);
             *file_name = _trim(cmd_line_copy.substr(cmd_line_copy.length(), cmd_line_copy.length()));
             return 0;
@@ -251,9 +254,33 @@ JobsList::JobsList() {
 JobsList::~JobsList() {
     delete jobs_vec;
 }
-void JobsList::addJob(const char* cmd_line, pid_t pid, bool isStopped) {
-    JobEntry* job = new JobEntry(max_job_id+1, strdup(cmd_line), pid, time(NULL), isStopped, -1);
-    jobs_vec->push_back(*job);
+void JobsList::addJob(int job_id, const char* cmd_line, pid_t pid, bool isStopped) {
+    JobEntry* job;
+    int effective_job_id;
+    if (job_id == -1) { // new job (not return from fg)
+        effective_job_id = max_job_id + 1;
+    }
+    else {
+        effective_job_id = job_id;
+    }
+    job = new JobEntry(effective_job_id, strdup(cmd_line), pid, time(NULL), isStopped, -1);
+    vector<JobEntry>::iterator it;
+    if (jobs_vec->size() == 0) {
+        jobs_vec->push_back(*job);
+    }
+    else if (jobs_vec->front().getJobID() > effective_job_id) {
+        jobs_vec->insert(jobs_vec->begin(), *job);
+    }
+    else if (jobs_vec->back().getJobID() < effective_job_id) {
+        jobs_vec->insert(jobs_vec->end(), *job);
+    }
+    else {
+        for (it = jobs_vec->begin() + 1; it != jobs_vec->end(); it++) {
+            if ((it - 1)->getJobID() < effective_job_id && it->getJobID() > effective_job_id) {
+                jobs_vec->insert(it, *job);
+            }
+        }
+    }
     updateMaxJobID();
     updateMaxStoppedJobID();
 }
@@ -293,8 +320,12 @@ void JobsList::removeFinishedJobs() {
     }
 }
 void JobsList::updateMaxJobID() {
-    if (jobs_vec->size() != 0)
+    if (jobs_vec->size() != 0) {
         max_job_id = jobs_vec->back().getJobID(); // back() is the last element in the vec
+    }
+    else {
+        max_job_id = 0;
+    }
 }
 void JobsList::updateMaxStoppedJobID() {
     if (jobs_vec->size() != 0){
@@ -303,6 +334,9 @@ void JobsList::updateMaxStoppedJobID() {
             max_stopped_jod_id = last_stopped->getJobID();
         else
             max_stopped_jod_id = 0;
+    }
+    else {
+        max_stopped_jod_id = 0;
     }
 }
 JobEntry* JobsList::getJobById(int jobId) {
@@ -344,12 +378,14 @@ int JobsList::getMaxJobID() {
 int JobsList::getMaxStoppedJobID() {
     return max_stopped_jod_id;
 }
-void JobsList::turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd) {
+void JobsList::turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd, SmallShell* smash) {
     if (bg_or_stopped_job == NULL) { // something wrong!!
         std::cerr << "something wrong!!" << endl;
     }
     else {
         pid_t job_pid = bg_or_stopped_job->getProcessID();
+        int job_id = bg_or_stopped_job->getJobID();
+        const char* job_cmd_line = bg_or_stopped_job->getCmdLine();
         if(cmd->getIOStatus() == 2) {
             std::cout << bg_or_stopped_job->getCmdLine() << " : " << job_pid << endl;
         }
@@ -371,12 +407,18 @@ void JobsList::turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd) {
             perror("smash error: kill failed");
             return;
         }
-        pid_t wait_status = waitpid(job_pid, NULL, 0);
+        removeJobByProcessId(job_pid); //remove from vec
+        smash->setCurrProcessID(job_pid);
+        smash->setCurrJobID(job_id);
+        smash->setCurrCmdLine(job_cmd_line);
+        pid_t wait_status = waitpid(job_pid, NULL, WUNTRACED);
         if (wait_status < 0) {
             perror("smash error: waitpid failed");
             return;
         }
-        removeJobByProcessId(job_pid); //remove from vec
+        smash->setCurrProcessID(getpid());
+        smash->setCurrJobID(-1);
+        smash->setCurrCmdLine(NULL);
         updateMaxJobID();
         updateMaxStoppedJobID();
     }
@@ -571,41 +613,48 @@ void ChangeDirCommand::execute(){
                 std::cerr << "smash error: cd: OLDPWD not set" << endl;
             }
             else{
-                char* copy_last_pwd = (char*)malloc(strlen(smash->getLastPwd()) + 1);
-                strcpy(copy_last_pwd, smash->getLastPwd());
-                smash->setLastPwd(getcwd(NULL, 0));
-                if(chdir(copy_last_pwd) == -1){
+                string copy_last_pwd = smash->getLastPwd();
+                const char* last = getcwd(NULL, 0);
+                string new_last_str(last);
+                smash->setLastPwd(new_last_str);
+                if(chdir(copy_last_pwd.c_str()) == -1){
                     smash->setLastPwd(copy_last_pwd);
-                    free(copy_last_pwd);
                     perror("smash error: chdir failed");
                 }
-                else{
-                    if(IO_status==2)
-                        std::cout << copy_last_pwd << endl;
-                    else{
-                        string buff(copy_last_pwd);
-                        buff.append("\n");
-                        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
-                    }
-                }
-                free(copy_last_pwd);
+//                else{
+//                    if(IO_status==2)
+//                        std::cout << copy_last_pwd << endl;
+//                    else{
+//                        string buff(copy_last_pwd);
+//                        buff.append("\n");
+//                        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+//                    }
+//                }
             }
         }
         else{ // change to arg[1]
-            smash->changeLastPwdStatus(); // from this point there is last_pwd in the system!!
-            smash->setLastPwd(getcwd(NULL, 0));
+
+            string current_last_pwd = smash->getLastPwd();
+            const char* last = getcwd(NULL, 0);
+            string new_last_str(last);
+            smash->setLastPwd(new_last_str);
             if (chdir(args[1]) == -1){
+                smash->setLastPwd(current_last_pwd);
                 perror("smash error: chdir failed");
             }
-            else{
-                if(IO_status==2)
-                    std::cout << args[1] << endl;
-                else{
-                    string buff(args[1]);
-                    buff.append("\n");
-                    ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
-                }
+            else
+            {
+                smash->changeLastPwdStatus(); // from this point there is last_pwd in the system!!
             }
+//            else{
+//                if(IO_status==2)
+//                    std::cout << args[1] << endl;
+//                else{
+//                    string buff(args[1]);
+//                    buff.append("\n");
+//                    ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
+//                }
+//            }
         }
     }
 }
@@ -653,14 +702,6 @@ void KillCommand::execute() {
                     free(s_signal);
                     free(spid);
                 }
-                if(abs(atoi(args[1])) == 19)
-                {
-                    job_to_send_signal->setIsStopped(true);
-                }
-                else if(abs(atoi(args[1])) == 18)
-                {
-                    job_to_send_signal->setIsStopped(false);
-                }
             }
             else {
                 perror("smash error: kill failed");
@@ -671,7 +712,7 @@ void KillCommand::execute() {
 // <---------- END KillCommand ------------>
 
 // <---------- START ForegroundCommand ------------>
-ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
+ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs, SmallShell* smash) : BuiltInCommand(cmd_line), jobs(jobs), smash(smash) {}
 void ForegroundCommand::execute() {
     jobs->removeFinishedJobs();
     if (args_length > 2) { // more than 1 arg
@@ -684,7 +725,7 @@ void ForegroundCommand::execute() {
             std::cerr << "smash error: fg: job-id " << atoi(args[1]) << " does not exist" << endl;
             return;
         }
-        jobs->turnToForeground(bg_or_stopped_job, this);
+        jobs->turnToForeground(bg_or_stopped_job, this, smash);
     }
     else { // zero arg
         if (jobs->isVecEmpty()) { // there is no jobs in the vec
@@ -692,7 +733,7 @@ void ForegroundCommand::execute() {
             return;
         }
         JobEntry* bg_or_stopped_job = jobs->getJobById(jobs->getMaxJobID());
-        jobs->turnToForeground(bg_or_stopped_job, this);
+        jobs->turnToForeground(bg_or_stopped_job, this, smash);
     }
 }
 // <---------- END ForegroundCommand ------------>
@@ -813,14 +854,12 @@ void HeadCommand::execute() {
             free(buff_arr);
         }
         free(buff);
-
     }
 }
 // <---------- END HeadCommand ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_job_id(-1) {}
-int SmallShell::curr_process_id = getpid();
+SmallShell::SmallShell() : prompt("smash"), lastPwdInitialized(false), curr_process_id(getpid()) {}
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -834,7 +873,7 @@ std::vector<JobEntry>* SmallShell::getTimeJobVec(){
 JobsList* SmallShell::getJobsList() {
     return &this->jobs_list;
 }
-const char* SmallShell::getLastPwd(){
+string SmallShell::getLastPwd(){
     return this->last_pwd;
 }
 int SmallShell::getCurrJobID(){
@@ -843,20 +882,29 @@ int SmallShell::getCurrJobID(){
 int SmallShell::getCurrProcessID(){
     return this->curr_process_id;
 }
-void SmallShell::setLastPwd(const char* update_last_pwd) {
+const char* SmallShell::getCurrCmdLine() {
+    return this->curr_cmd_line;
+}
+const char* SmallShell::getLastCmd(){
+    return last_cmd.c_str();
+}
+void SmallShell::setLastPwd(string update_last_pwd) {
     this->last_pwd = update_last_pwd;
 }
 void SmallShell::setCurrJobID(int job_id) {
     this->curr_job_id = job_id;
+}
+void SmallShell::setCurrProcessID(int pid) {
+    this->curr_process_id = pid;
+}
+void SmallShell::setCurrCmdLine(const char* cmd_line) {
+    this->curr_cmd_line = cmd_line;
 }
 bool SmallShell::isLastPwdInitialized() {
     return this->lastPwdInitialized;
 }
 void SmallShell::changeLastPwdStatus() {
     this->lastPwdInitialized = true;
-}
-const char* SmallShell::getLastCmd(){
-    return last_cmd.c_str();
 }
 int SmallShell::findMinAlarm(){
     if(time_jobs_vec.empty())
@@ -865,12 +913,14 @@ int SmallShell::findMinAlarm(){
     vector<JobEntry>::iterator min = time_jobs_vec.begin();
     for(it = time_jobs_vec.begin(); it != time_jobs_vec.end(); it++) {
         if (it->getTimeUp() - difftime(time(NULL), it->getTImeInserted()) < min->getTimeUp() - difftime(time(NULL), min->getTImeInserted())) {
-           min = it;
+            min = it;
         }
     }
     return (min->getTimeUp() - difftime(time(NULL), min->getTImeInserted()));
 }
 // <---------- END SmallShell ------------>
+
+
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
@@ -898,7 +948,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         return new KillCommand(cmd_line, &jobs_list);
     }
     else if (firstWord.compare("fg") == 0) {
-        return new ForegroundCommand(cmd_line, &jobs_list);
+        return new ForegroundCommand(cmd_line, &jobs_list, this);
     }
     else if (firstWord.compare("bg") == 0) {
         return new BackgroundCommand(cmd_line, &jobs_list);
@@ -914,29 +964,29 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         pid_t pid = fork();
         if (pid == 0) { //child
             setpgrp();
-            if (_isTimeCommand(cmd_line))
-            {
+            if (_isTimeCommand(cmd_line)) {
                 char* tmp_args[COMMAND_MAX_ARGS];
                 _parseCommandLine(cmd_line,tmp_args);
                 std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
-                //alarm(atoi(tmp_args[1]));
                 return new ExternalCommand(new_cmd_line.c_str(), &jobs_list);
             }
             return new ExternalCommand(cmd_line, &jobs_list);
         } else if (pid > 0) { //parent
             if (isBackground == false) {
                 this->curr_process_id = pid;
-                pid_t wait_status = waitpid(pid, NULL, 0);
+                this->curr_cmd_line = cmd_line;
+                this->curr_job_id = -1;
+                pid_t wait_status = waitpid(pid, NULL, WUNTRACED);
                 if (wait_status < 0) {
                     perror("smash error: waitpid failed");
                 }
                 this->curr_process_id = getpid();
+                this->curr_cmd_line = NULL;
+                this->curr_job_id = -1;
             } else {
-//                alarm(time_up);
                 jobs_list.removeFinishedJobs(); // if we are going to add to the vec so remove jobs from the shell process (father for all the bg commands)
-                jobs_list.addJob(cmd_line, pid, false);
-                if (_isTimeCommand(cmd_line))
-                {
+                jobs_list.addJob(-1, cmd_line, pid, false);
+                if (_isTimeCommand(cmd_line)) {
                     char* tmp_args[COMMAND_MAX_ARGS];
                     _parseCommandLine(cmd_line,tmp_args);
                     JobEntry* job = new JobEntry(-1, strdup(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
@@ -1022,25 +1072,14 @@ void SmallShell::executeCommand(const char *cmd_line) {
         }
     }
     else {
-
-        if (_isTimeCommand(cmd_line) && !_isBackgroundComamnd(cmd_line))
-        {
-            char* tmp_args[COMMAND_MAX_ARGS];
-            _parseCommandLine(cmd_line,tmp_args);
+        if (_isTimeCommand(cmd_line) && !_isBackgroundComamnd(cmd_line)) {
+            char *tmp_args[COMMAND_MAX_ARGS];
+            _parseCommandLine(cmd_line, tmp_args);
             std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
             alarm(atoi(tmp_args[1]));
             last_cmd = new_cmd_line;
             executeCommand(new_cmd_line.c_str());
-        }
-        else {
-//            if (_isTimeCommand(cmd_line))
-//            {
-//                char* tmp_args[COMMAND_MAX_ARGS];
-//                _parseCommandLine(cmd_line,tmp_args);
-//                JobEntry* job = new JobEntry(-1, strdup(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
-//                time_jobs_vec.push_back(*job);
-//                alarm(findMinAlarm());
-//            }
+        } else {
             Command *cmd = CreateCommand(cmd_line);
             if (cmd != NULL) {
                 cmd->execute();
