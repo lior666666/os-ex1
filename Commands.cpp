@@ -654,7 +654,8 @@ void JobsCommand::execute() {
 // <---------- START KillCommand ------------>
 KillCommand::KillCommand(const char* cmd_line, JobsList* jobs): BuiltInCommand(cmd_line), jobs(jobs) {}
 void KillCommand::execute() {
-    if(args_length!=3)
+    jobs->removeFinishedJobs();
+    if(args_length!=3 || atoi(args[1])>-1 || atoi(args[2]) == 0)
     {
         std::cerr << "smash error: kill: invalid arguments" << endl;
     }
@@ -758,6 +759,7 @@ void BackgroundCommand::execute() {
 // <---------- START QuitCommand ------------>
 QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void QuitCommand::execute() {
+    jobs->removeFinishedJobs();
     char sign[] = "kill";
     if (args[1] != NULL && strcmp(args[1], sign) == 0) {
         jobs->killAllJobs(this);
