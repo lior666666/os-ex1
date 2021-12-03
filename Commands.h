@@ -8,6 +8,7 @@
 #define COMMAND_MAX_ARGS (21)
 
 class Command;
+class SmallShell;
 class JobEntry {
     int job_id;
     const char* cmd_line;
@@ -35,7 +36,7 @@ class JobsList {
 public:
     JobsList();
     ~JobsList();
-    void addJob(const char* cmd_line, pid_t pid, bool isStopped = false);
+    void addJob(int job_id, const char* cmd_line, pid_t pid, bool isStopped = false);
     void printJobsList(Command* cmd, int IO_status);
     void removeFinishedJobs();
     void updateMaxJobID();
@@ -47,7 +48,7 @@ public:
     bool isVecEmpty();
     int getMaxJobID();
     int getMaxStoppedJobID();
-    void turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd);
+    void turnToForeground(JobEntry* bg_or_stopped_job, Command* cmd, SmallShell* smash);
     void resumesStoppedJob(JobEntry* stopped_job, Command* cmd);
     void killAllJobs(Command* cmd);
 };
@@ -163,8 +164,9 @@ public:
 
 class ForegroundCommand : public BuiltInCommand {
     JobsList* jobs;
+    SmallShell* smash;
 public:
-    ForegroundCommand(const char* cmd_line, JobsList* jobs);
+    ForegroundCommand(const char* cmd_line, JobsList* jobs, SmallShell* smash);
     virtual ~ForegroundCommand() {}
     void execute() override;
 };
@@ -190,27 +192,31 @@ private:
     JobsList jobs_list;
     std::vector<JobEntry> time_jobs_vec;
     const char* prompt;
-    const char* last_pwd;
+    std::string last_pwd;
     bool lastPwdInitialized;
-    std::string last_cmd;
     int curr_job_id;
-    static pid_t curr_process_id;
+    std::string last_cmd;
+    const char* curr_cmd_line;
+    pid_t curr_process_id;
     SmallShell();
 public:
     Command *CreateCommand(const char* cmd_line);
     JobsList* getJobsList();
     const char* getPrompt();
-    const char* getLastPwd();
+    std::string getLastPwd();
     const char* getLastCmd();
     void setLastCmd(const char* cmd_line);
     int getCurrJobID();
     int getCurrProcessID();
+    const char* getCurrCmdLine();
     int findMinAlarm();
     std::vector<JobEntry>* getTimeJobVec();
     bool isLastPwdInitialized();
     void setPrompt(const char* prompt);
-    void setLastPwd(const char* last_pwd);
+    void setLastPwd(std::string last_pwd);
     void setCurrJobID(int job_id);
+    void setCurrProcessID(int pid);
+    void setCurrCmdLine(const char* cmd_line);
     void changeLastPwdStatus();
     SmallShell(SmallShell const&)      = delete; // disable copy ctor
     void operator=(SmallShell const&)  = delete; // disable = operator

@@ -16,8 +16,8 @@ int main(int argc, char* argv[]) {
     sa.sa_handler = alarmHandler;
     sa.sa_flags = SA_RESTART;
     if(sigaction(SIGALRM , &sa, NULL)==-1) {
-            perror("smash error: failed to set ctrl-C handler");
-        }
+        perror("smash error: failed to set ctrl-C handler");
+    }
     //TODO: setup sig alarm handler
 
     SmallShell& smash = SmallShell::getInstance();
@@ -27,6 +27,9 @@ int main(int argc, char* argv[]) {
         std::cout << smash.getPrompt() << "> ";
         std::string cmd_line;
         std::getline(std::cin, cmd_line);
+        if(cmd_line == ""){
+            continue;
+        }
         smash.executeCommand(cmd_line.c_str());
     }
     return 0;
