@@ -192,7 +192,7 @@ class SmallShell {
     JobsList jobs_list;
     std::vector<JobEntry> time_jobs_vec;
     const char* prompt;
-    const char* last_pwd;
+    char* last_pwd;
     bool lastPwdInitialized;
     int curr_job_id;
     std::string last_cmd;
@@ -203,7 +203,7 @@ class SmallShell {
   Command *CreateCommand(const char* cmd_line);
   JobsList* getJobsList();
   const char* getPrompt();
-  const char* getLastPwd();
+  char* getLastPwd();
   const char* getLastCmd();
   void setLastCmd(const char* cmd_line);
   int getCurrJobID();

@@ -617,37 +617,27 @@ void ChangeDirCommand::execute(){
                 strcpy(copy_last_pwd, smash->getLastPwd());
                 smash->setLastPwd(getcwd(NULL, 0));
                 if(chdir(copy_last_pwd) == -1){
-                    smash->setLastPwd(copy_last_pwd);
-                    free(copy_last_pwd);
                     perror("smash error: chdir failed");
-                }
-                else{
-                    if(IO_status==2)
-                        std::cout << copy_last_pwd << endl;
-                    else{
-                        string buff(copy_last_pwd);
-                        buff.append("\n");
-                        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
-                    }
+                    smash->setLastPwd(copy_last_pwd);
                 }
                 free(copy_last_pwd);
             }
         }
-        else{ // change to arg[1]
-            smash->changeLastPwdStatus(); // from this point there is last_pwd in the system!!
+        else { // change to arg[1]
+            char* copy_last_pwd = NULL;
+            if (smash->isLastPwdInitialized()) {
+                copy_last_pwd = (char *) malloc(strlen(smash->getLastPwd()) + 1);
+                strcpy(copy_last_pwd, smash->getLastPwd());
+            }
             smash->setLastPwd(getcwd(NULL, 0));
             if (chdir(args[1]) == -1){
                 perror("smash error: chdir failed");
+                smash->setLastPwd(copy_last_pwd);
             }
-            else{
-                if(IO_status==2)
-                    std::cout << args[1] << endl;
-                else{
-                    string buff(args[1]);
-                    buff.append("\n");
-                    ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
-                }
+            else {
+                smash->changeLastPwdStatus(); // from this point there is last_pwd in the system!!
             }
+            free(copy_last_pwd);
         }
     }
 }
@@ -866,7 +856,7 @@ std::vector<JobEntry>* SmallShell::getTimeJobVec(){
 JobsList* SmallShell::getJobsList() {
     return &this->jobs_list;
 }
-const char* SmallShell::getLastPwd(){
+char* SmallShell::getLastPwd(){
     return this->last_pwd;
 }
 int SmallShell::getCurrJobID(){
@@ -882,7 +872,8 @@ const char* SmallShell::getLastCmd(){
     return last_cmd.c_str();
 }
 void SmallShell::setLastPwd(const char* update_last_pwd) {
-    this->last_pwd = update_last_pwd;
+    free(this->last_pwd);
+    this->last_pwd = strdup(update_last_pwd);
 }
 void SmallShell::setCurrJobID(int job_id) {
     this->curr_job_id = job_id;
