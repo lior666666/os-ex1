@@ -495,13 +495,16 @@ void JobsList::killAllJobs(Command* cmd) {
 
 // <---------- START Command ------------>
 Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
-    this->cmd_line_without_const = strdup(cmd_line);
     string new_cmd_line;
     IO_status = checkForFile(cmd_line,&new_cmd_line ,&file_name);
-    if(IO_status == 2)
+    if(IO_status == 2) {
         this->args_length = _parseCommandLine(cmd_line, this->args);
-    else
+        this->cmd_line_without_const = strdup(cmd_line);
+    }
+    else {
         this->args_length = _parseCommandLine(new_cmd_line.c_str(), this->args);
+        this->cmd_line_without_const = strdup(new_cmd_line.c_str());
+    }
     _removeBackgroundSign(this->args[this->args_length-1]);
 }
 Command::~Command() {
@@ -516,7 +519,8 @@ const char* Command::getCmdLine() {
 int Command::getIOStatus() {
     return this->IO_status;
 }
-void Command::ChangeIO(int isAppend, const char* buff, int length) {
+
+void Command::ChangeIO(int isAppend, const char* buff = "", int length = 0) {
     int open_fd = 0;
     if (isAppend == 1) {
         open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRWXU|S_IRWXG|S_IRWXO);
@@ -528,12 +532,14 @@ void Command::ChangeIO(int isAppend, const char* buff, int length) {
         perror("smash error: open failed");
         return;
     }
-    if (write(open_fd, buff, length) == -1) {
-        perror("smash error: write failed");
-        return;
-    }
-    if (close(open_fd) == -1) {
-        perror("smash error: close failed");
+    if(length != 0) {
+        if (write(open_fd, buff, length) == -1) {
+            perror("smash error: write failed");
+            return;
+        }
+        if (close(open_fd) == -1) {
+            perror("smash error: close failed");
+        }
     }
 }
 // <---------- END Command ------------>
@@ -549,10 +555,39 @@ void ExternalCommand::execute() {
     char sign[] = "-c";
     _removeBackgroundSign(cmd_line_without_const);
     char* const argv[] = {file, sign, cmd_line_without_const, NULL};
-    int execv_status = execv("/bin/bash", argv);
-    if (execv_status < 0) {
-        perror("smash error: execv failed");
+    if (IO_status ==2) {
+        int execv_status = execv("/bin/bash", argv);
+        if (execv_status < 0) {
+            perror("smash error: execv failed");
+        }
     }
+    else
+    {
+        int open_fd;
+        if (IO_status == 1) {
+            open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRWXU|S_IRWXG|S_IRWXO);
+            if (open_fd == -1) {
+                perror("smash error: open failed");
+                return;
+            }
+        }
+        else {
+            open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_TRUNC, S_IRWXU|S_IRWXG|S_IRWXO);
+            if (open_fd == -1) {
+                perror("smash error: open failed");
+                return;
+            }
+        }
+        dup2(open_fd, 1);
+        int execv_status = execv("/bin/bash", argv);
+        if (close(open_fd) == -1) {
+            perror("smash error: close failed");
+        }
+        if (execv_status < 0) {
+            perror("smash error: execv failed");
+        }
+    }
+
 }
 // <---------- END ExternalCommand ------------>
 
@@ -567,10 +602,10 @@ void ChangePromptCommand::execute() {
 // <---------- END ChangePromptCommand ------------>
 
 // <---------- START ShowPidCommand ------------>
-ShowPidCommand::ShowPidCommand(const char* cmd_line): BuiltInCommand(cmd_line) {}
+ShowPidCommand::ShowPidCommand(const char* cmd_line, SmallShell* smash) : BuiltInCommand(cmd_line), smash(smash) {}
 void ShowPidCommand::execute(){
     if (IO_status == 2) {
-        std::cout << "smash pid is " << getpid() << endl;  // need to check if that is the proper way.
+        std::cout << "smash pid is " << smash->getSmashPid() << endl;  // need to check if that is the proper way.
     }
     else {
         string buff = "smash pid is ";
@@ -613,48 +648,31 @@ void ChangeDirCommand::execute(){
                 std::cerr << "smash error: cd: OLDPWD not set" << endl;
             }
             else{
-                string copy_last_pwd = smash->getLastPwd();
-                const char* last = getcwd(NULL, 0);
-                string new_last_str(last);
-                smash->setLastPwd(new_last_str);
-                if(chdir(copy_last_pwd.c_str()) == -1){
-                    smash->setLastPwd(copy_last_pwd);
+                char* copy_last_pwd = (char*)malloc(strlen(smash->getLastPwd()) + 1);
+                strcpy(copy_last_pwd, smash->getLastPwd());
+                smash->setLastPwd(getcwd(NULL, 0));
+                if(chdir(copy_last_pwd) == -1){
                     perror("smash error: chdir failed");
+                    smash->setLastPwd(copy_last_pwd);
                 }
-//                else{
-//                    if(IO_status==2)
-//                        std::cout << copy_last_pwd << endl;
-//                    else{
-//                        string buff(copy_last_pwd);
-//                        buff.append("\n");
-//                        ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
-//                    }
-//                }
+                free(copy_last_pwd);
             }
         }
-        else{ // change to arg[1]
-
-            string current_last_pwd = smash->getLastPwd();
-            const char* last = getcwd(NULL, 0);
-            string new_last_str(last);
-            smash->setLastPwd(new_last_str);
-            if (chdir(args[1]) == -1){
-                smash->setLastPwd(current_last_pwd);
-                perror("smash error: chdir failed");
+        else { // change to arg[1]
+            char* copy_last_pwd = NULL;
+            if (smash->isLastPwdInitialized()) {
+                copy_last_pwd = (char *) malloc(strlen(smash->getLastPwd()) + 1);
+                strcpy(copy_last_pwd, smash->getLastPwd());
             }
-            else
-            {
+            smash->setLastPwd(getcwd(NULL, 0));
+            if (chdir(args[1]) == -1){
+                perror("smash error: chdir failed");
+                smash->setLastPwd(copy_last_pwd);
+            }
+            else {
                 smash->changeLastPwdStatus(); // from this point there is last_pwd in the system!!
             }
-//            else{
-//                if(IO_status==2)
-//                    std::cout << args[1] << endl;
-//                else{
-//                    string buff(args[1]);
-//                    buff.append("\n");
-//                    ChangeIO(IO_status, buff.c_str(), strlen(buff.c_str()));
-//                }
-//            }
+            free(copy_last_pwd);
         }
     }
 }
@@ -671,14 +689,19 @@ void JobsCommand::execute() {
 // <---------- START KillCommand ------------>
 KillCommand::KillCommand(const char* cmd_line, JobsList* jobs): BuiltInCommand(cmd_line), jobs(jobs) {}
 void KillCommand::execute() {
-    if(args_length!=3)
+    jobs->removeFinishedJobs();
+    if(args_length!=3 || atoi(args[1])>-1 || atoi(args[2]) == 0)
     {
+        if(IO_status!=2)
+            ChangeIO(IO_status);
         std::cerr << "smash error: kill: invalid arguments" << endl;
     }
     else
     {
         JobEntry* job_to_send_signal = jobs->getJobById(atoi(args[2]));
         if(job_to_send_signal == NULL){
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr <<  "smash error: kill: job-id " << args[2] << " does not exist" << endl;
         }
         else
@@ -704,6 +727,8 @@ void KillCommand::execute() {
                 }
             }
             else {
+                if(IO_status!=2)
+                    ChangeIO(IO_status);
                 perror("smash error: kill failed");
             }
         }
@@ -716,12 +741,16 @@ ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs, Small
 void ForegroundCommand::execute() {
     jobs->removeFinishedJobs();
     if (args_length > 2) { // more than 1 arg
+        if(IO_status!=2)
+            ChangeIO(IO_status);
         std::cerr << "smash error: fg: invalid arguments" << endl;
         return;
     }
     else if (args_length == 2) { // one arg
         JobEntry* bg_or_stopped_job = jobs->getJobById(atoi(args[1]));
         if (bg_or_stopped_job == NULL) { // there is no such bg/stopped job with given ID
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: fg: job-id " << atoi(args[1]) << " does not exist" << endl;
             return;
         }
@@ -729,6 +758,8 @@ void ForegroundCommand::execute() {
     }
     else { // zero arg
         if (jobs->isVecEmpty()) { // there is no jobs in the vec
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: fg: jobs list is empty" << endl;
             return;
         }
@@ -743,12 +774,16 @@ BackgroundCommand::BackgroundCommand(const char* cmd_line, JobsList* jobs) : Bui
 void BackgroundCommand::execute() {
     jobs->removeFinishedJobs();
     if (args_length > 2) { // more than 1 arg
+        if(IO_status!=2)
+            ChangeIO(IO_status);
         std::cerr << "smash error: bg: invalid arguments" << endl;
         return;
     }
     else if (args_length == 2) { // one arg
         JobEntry* bg_or_stopped_job = jobs->getJobById(atoi(args[1]));
         if (bg_or_stopped_job == NULL) { // there is no such bg/stopped job with given ID
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: bg: job-id " << atoi(args[1]) << " does not exist" << endl;
             return;
         }
@@ -756,12 +791,16 @@ void BackgroundCommand::execute() {
             jobs->resumesStoppedJob(bg_or_stopped_job, this);
         }
         else { // the process still running in the background
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: bg: job-id " << atoi(args[1])<< " is already running in the background" << endl;
         }
     }
     else { // zero arg
         JobEntry* last_stopped_job = jobs->getLastStoppedJob();
         if (last_stopped_job == NULL) { // there are no stopped jobs in the vec
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: bg: there is no stopped jobs to resume" << endl;
             return;
         }
@@ -775,6 +814,7 @@ void BackgroundCommand::execute() {
 // <---------- START QuitCommand ------------>
 QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void QuitCommand::execute() {
+    jobs->removeFinishedJobs();
     char sign[] = "kill";
     if (args[1] != NULL && strcmp(args[1], sign) == 0) {
         jobs->killAllJobs(this);
@@ -787,6 +827,8 @@ void QuitCommand::execute() {
 HeadCommand::HeadCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void HeadCommand::execute() {
     if(args_length < 2) {
+        if(IO_status!=2)
+            ChangeIO(IO_status);
         std::cerr << "smash error: head: not enough arguments" << endl;
         return;
     }
@@ -802,10 +844,14 @@ void HeadCommand::execute() {
             open_fd = open(args[2], O_RDONLY, 0666);
         }
         if (open_fd == -1) {
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             perror("smash error: open failed");
             return;
         }
         if (line_numbers == 0) {
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             return; // stop if we should not print any lines
         }
         int size = 3000;
@@ -815,6 +861,8 @@ void HeadCommand::execute() {
         int round = 1;
         int status = read(open_fd, &buff[i], 1);
         if(status == -1) {
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             perror("smash error: read failed");
         }
         if(buff[i] == '\n') {
@@ -828,6 +876,8 @@ void HeadCommand::execute() {
             }
             status = read(open_fd, &buff[i], 1);
             if(status == -1) {
+                if(IO_status!=2)
+                    ChangeIO(IO_status);
                 perror("smash error: read failed");
                 free(buff);
                 return;
@@ -859,7 +909,7 @@ void HeadCommand::execute() {
 // <---------- END HeadCommand ------------>
 
 // <---------- START SmallShell ------------>
-SmallShell::SmallShell() : prompt("smash"), lastPwdInitialized(false), curr_process_id(getpid()) {}
+SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_process_id(getpid()), smash_pid(getpid()) {}
 SmallShell::~SmallShell() {}
 const char* SmallShell::getPrompt(){
     return this->prompt;
@@ -873,11 +923,14 @@ std::vector<JobEntry>* SmallShell::getTimeJobVec(){
 JobsList* SmallShell::getJobsList() {
     return &this->jobs_list;
 }
-string SmallShell::getLastPwd(){
+char* SmallShell::getLastPwd(){
     return this->last_pwd;
 }
 int SmallShell::getCurrJobID(){
     return this->curr_job_id;
+}
+int SmallShell::getSmashPid(){
+    return this->smash_pid;
 }
 int SmallShell::getCurrProcessID(){
     return this->curr_process_id;
@@ -888,8 +941,9 @@ const char* SmallShell::getCurrCmdLine() {
 const char* SmallShell::getLastCmd(){
     return last_cmd.c_str();
 }
-void SmallShell::setLastPwd(string update_last_pwd) {
-    this->last_pwd = update_last_pwd;
+void SmallShell::setLastPwd(const char* update_last_pwd) {
+    free(this->last_pwd);
+    this->last_pwd = strdup(update_last_pwd);
 }
 void SmallShell::setCurrJobID(int job_id) {
     this->curr_job_id = job_id;
@@ -933,7 +987,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
         return new ChangePromptCommand(cmd_line, this);
     }
     else if (firstWord.compare("showpid") == 0) {
-        return new ShowPidCommand(cmd_line);
+        return new ShowPidCommand(cmd_line, this);
     }
     else if (firstWord.compare("pwd") == 0) {
         return new GetCurrDirCommand(cmd_line);
