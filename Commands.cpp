@@ -311,9 +311,21 @@ void JobsList::removeFinishedJobs() {
         while (kidpid > 0) {
             kidpid = waitpid(-1, &status, WNOHANG);
             if (kidpid > 0) {
+                std::cout << " got here!\n";
                 this->removeJobByProcessId(kidpid);
             }
         }
+//        vector<JobEntry>::iterator it;
+//        for (it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
+//            kidpid = it->getProcessID();
+//            if(kidpid == 0)
+//                break;
+//            if(kill(kidpid,0)!=0)
+//            {
+//                this->removeJobByProcessId(kidpid);
+//            }
+//        }
+
         // need to do the rows below after every change in the vec
         updateMaxJobID();
         updateMaxStoppedJobID();
@@ -710,6 +722,7 @@ void KillCommand::execute() {
                 if(IO_status == 2) {
                     std::cout << "signal number " << abs(atoi(args[1])) << " was sent to pid "
                               << job_to_send_signal->getProcessID() << endl;
+                    jobs->removeFinishedJobs();
                 }
                 else {
                     string buff("signal number ");
@@ -890,9 +903,13 @@ void HeadCommand::execute() {
             }
         }
         if(IO_status == 2) {
+            char* buff_arr = (char*) malloc(i+2);
             for (int j = 0; j < i+1; ++j) {
-                std::cout << buff[j];
+                buff_arr[j] = buff[j];
             }
+            string buff_str(buff_arr);
+            write(STDOUT_FILENO,buff_str.c_str(), strlen(buff_str.c_str()));
+            free(buff_arr);
         }
         else {
             char* buff_arr = (char*) malloc(i+2);
@@ -1058,6 +1075,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
 void SmallShell::executeCommand(const char *cmd_line) {
     int pipe_status = _isPipeCommand(cmd_line);
     if (pipe_status > 0) { // pipe
+        jobs_list.removeFinishedJobs();
         std::string left;
         std::string right;
         _splitPipeCommands(cmd_line, &left, &right);
@@ -1117,10 +1135,12 @@ void SmallShell::executeCommand(const char *cmd_line) {
                 }
             }
         } else if (pid > 0) { //parent - smash
-            pid_t wait_status = wait(NULL);
-            if (wait_status < 0) {
+            pid_t wait_status1 = wait(NULL);
+            if (wait_status1 < 0) {
                 perror("smash error: wait failed");
             }
+            wait(NULL);
+            wait(NULL);
         } else {
             perror("smash error: fork failed");
         }

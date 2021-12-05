@@ -65,6 +65,3 @@ void alarmHandler(int signum) {
         }
     }
 }
-
-
-
