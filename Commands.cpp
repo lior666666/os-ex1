@@ -26,33 +26,33 @@ const std::string WHITESPACE = " \n\r\t\f\v";
 
 string _ltrim(const std::string& s)
 {
-  size_t start = s.find_first_not_of(WHITESPACE);
-  return (start == std::string::npos) ? "" : s.substr(start);
+    size_t start = s.find_first_not_of(WHITESPACE);
+    return (start == std::string::npos) ? "" : s.substr(start);
 }
 
 string _rtrim(const std::string& s)
 {
-  size_t end = s.find_last_not_of(WHITESPACE);
-  return (end == std::string::npos) ? "" : s.substr(0, end + 1);
+    size_t end = s.find_last_not_of(WHITESPACE);
+    return (end == std::string::npos) ? "" : s.substr(0, end + 1);
 }
 
 string _trim(const std::string& s)
 {
-  return _rtrim(_ltrim(s));
+    return _rtrim(_ltrim(s));
 }
 
 int _parseCommandLine(const char* cmd_line, char** args) {
-  FUNC_ENTRY()
-  int i = 0;
-  std::istringstream iss(_trim(string(cmd_line)).c_str());
-  for(std::string s; iss >> s; ) {
-    args[i] = (char*)malloc(s.length()+1);
-    memset(args[i], 0, s.length()+1);
-    strcpy(args[i], s.c_str());
-    args[++i] = NULL;
-  }
-  return i;
-  FUNC_EXIT()
+    FUNC_ENTRY()
+    int i = 0;
+    std::istringstream iss(_trim(string(cmd_line)).c_str());
+    for(std::string s; iss >> s; ) {
+        args[i] = (char*)malloc(s.length()+1);
+        memset(args[i], 0, s.length()+1);
+        strcpy(args[i], s.c_str());
+        args[++i] = NULL;
+    }
+    return i;
+    FUNC_EXIT()
 }
 
 bool _isTimeCommand(const char* cmd_line){
@@ -93,8 +93,8 @@ void _splitPipeCommands(const char* cmd_line, std::string* left, std::string* ri
 }
 
 bool _isBackgroundComamnd(const char* cmd_line) {
-  const string str(cmd_line);
-  return str[str.find_last_not_of(WHITESPACE)] == '&';
+    const string str(cmd_line);
+    return str[str.find_last_not_of(WHITESPACE)] == '&';
 }
 
 std::string removeTimeOut(const char* cmd_line, char* arg){
@@ -159,21 +159,21 @@ char* _removeConstToCmdLine(char* cmd_line) {
 }
 
 void _removeBackgroundSign(char* cmd_line) {
-  const string str(cmd_line);
-  // find last character other than spaces
-  unsigned int idx = str.find_last_not_of(WHITESPACE);
-  // if all characters are spaces then return
-  if (idx == string::npos) {
-    return;
-  }
-  // if the command line does not end with & then return
-  if (cmd_line[idx] != '&') {
-    return;
-  }
-  // replace the & (background sign) with space and then remove all tailing spaces.
-  cmd_line[idx] = ' ';
-  // truncate the command line string up to the last non-space character
-  cmd_line[str.find_last_not_of(WHITESPACE, idx)] = 0;
+    const string str(cmd_line);
+    // find last character other than spaces
+    unsigned int idx = str.find_last_not_of(WHITESPACE);
+    // if all characters are spaces then return
+    if (idx == string::npos) {
+        return;
+    }
+    // if the command line does not end with & then return
+    if (cmd_line[idx] != '&') {
+        return;
+    }
+    // replace the & (background sign) with space and then remove all tailing spaces.
+    cmd_line[idx] = ' ';
+    // truncate the command line string up to the last non-space character
+    cmd_line[str.find_last_not_of(WHITESPACE, idx)] = 0;
 }
 
 // <---------- START JobEntry ------------>
@@ -314,6 +314,10 @@ void JobsList::removeFinishedJobs() {
                 this->removeJobByProcessId(kidpid);
             }
         }
+
+
+
+
         // need to do the rows below after every change in the vec
         updateMaxJobID();
         updateMaxStoppedJobID();
@@ -495,13 +499,16 @@ void JobsList::killAllJobs(Command* cmd) {
 
 // <---------- START Command ------------>
 Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
-    this->cmd_line_without_const = strdup(cmd_line);
     string new_cmd_line;
     IO_status = checkForFile(cmd_line,&new_cmd_line ,&file_name);
-    if(IO_status == 2)
+    if(IO_status == 2) {
         this->args_length = _parseCommandLine(cmd_line, this->args);
-    else
+        this->cmd_line_without_const = strdup(cmd_line);
+    }
+    else {
         this->args_length = _parseCommandLine(new_cmd_line.c_str(), this->args);
+        this->cmd_line_without_const = strdup(new_cmd_line.c_str());
+    }
     _removeBackgroundSign(this->args[this->args_length-1]);
 }
 Command::~Command() {
@@ -516,7 +523,8 @@ const char* Command::getCmdLine() {
 int Command::getIOStatus() {
     return this->IO_status;
 }
-void Command::ChangeIO(int isAppend, const char* buff, int length) {
+
+void Command::ChangeIO(int isAppend, const char* buff = "", int length = 0) {
     int open_fd = 0;
     if (isAppend == 1) {
         open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRWXU|S_IRWXG|S_IRWXO);
@@ -528,12 +536,14 @@ void Command::ChangeIO(int isAppend, const char* buff, int length) {
         perror("smash error: open failed");
         return;
     }
-    if (write(open_fd, buff, length) == -1) {
-        perror("smash error: write failed");
-        return;
-    }
-    if (close(open_fd) == -1) {
-        perror("smash error: close failed");
+    if(length != 0) {
+        if (write(open_fd, buff, length) == -1) {
+            perror("smash error: write failed");
+            return;
+        }
+        if (close(open_fd) == -1) {
+            perror("smash error: close failed");
+        }
     }
 }
 // <---------- END Command ------------>
@@ -549,10 +559,39 @@ void ExternalCommand::execute() {
     char sign[] = "-c";
     _removeBackgroundSign(cmd_line_without_const);
     char* const argv[] = {file, sign, cmd_line_without_const, NULL};
-    int execv_status = execv("/bin/bash", argv);
-    if (execv_status < 0) {
-        perror("smash error: execv failed");
+    if (IO_status ==2) {
+        int execv_status = execv("/bin/bash", argv);
+        if (execv_status < 0) {
+            perror("smash error: execv failed");
+        }
     }
+    else
+    {
+        int open_fd;
+        if (IO_status == 1) {
+            open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRWXU|S_IRWXG|S_IRWXO);
+            if (open_fd == -1) {
+                perror("smash error: open failed");
+                return;
+            }
+        }
+        else {
+            open_fd = open(file_name.c_str(), O_WRONLY|O_CREAT|O_TRUNC, S_IRWXU|S_IRWXG|S_IRWXO);
+            if (open_fd == -1) {
+                perror("smash error: open failed");
+                return;
+            }
+        }
+        dup2(open_fd, 1);
+        int execv_status = execv("/bin/bash", argv);
+        if (close(open_fd) == -1) {
+            perror("smash error: close failed");
+        }
+        if (execv_status < 0) {
+            perror("smash error: execv failed");
+        }
+    }
+
 }
 // <---------- END ExternalCommand ------------>
 
@@ -657,12 +696,16 @@ void KillCommand::execute() {
     jobs->removeFinishedJobs();
     if(args_length!=3 || atoi(args[1])>-1 || atoi(args[2]) == 0)
     {
+        if(IO_status!=2)
+            ChangeIO(IO_status);
         std::cerr << "smash error: kill: invalid arguments" << endl;
     }
     else
     {
         JobEntry* job_to_send_signal = jobs->getJobById(atoi(args[2]));
         if(job_to_send_signal == NULL){
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr <<  "smash error: kill: job-id " << args[2] << " does not exist" << endl;
         }
         else
@@ -688,6 +731,8 @@ void KillCommand::execute() {
                 }
             }
             else {
+                if(IO_status!=2)
+                    ChangeIO(IO_status);
                 perror("smash error: kill failed");
             }
         }
@@ -700,12 +745,16 @@ ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs, Small
 void ForegroundCommand::execute() {
     jobs->removeFinishedJobs();
     if (args_length > 2) { // more than 1 arg
+        if(IO_status!=2)
+            ChangeIO(IO_status);
         std::cerr << "smash error: fg: invalid arguments" << endl;
         return;
     }
     else if (args_length == 2) { // one arg
         JobEntry* bg_or_stopped_job = jobs->getJobById(atoi(args[1]));
         if (bg_or_stopped_job == NULL) { // there is no such bg/stopped job with given ID
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: fg: job-id " << atoi(args[1]) << " does not exist" << endl;
             return;
         }
@@ -713,6 +762,8 @@ void ForegroundCommand::execute() {
     }
     else { // zero arg
         if (jobs->isVecEmpty()) { // there is no jobs in the vec
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: fg: jobs list is empty" << endl;
             return;
         }
@@ -727,12 +778,16 @@ BackgroundCommand::BackgroundCommand(const char* cmd_line, JobsList* jobs) : Bui
 void BackgroundCommand::execute() {
     jobs->removeFinishedJobs();
     if (args_length > 2) { // more than 1 arg
+        if(IO_status!=2)
+            ChangeIO(IO_status);
         std::cerr << "smash error: bg: invalid arguments" << endl;
         return;
     }
     else if (args_length == 2) { // one arg
         JobEntry* bg_or_stopped_job = jobs->getJobById(atoi(args[1]));
         if (bg_or_stopped_job == NULL) { // there is no such bg/stopped job with given ID
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: bg: job-id " << atoi(args[1]) << " does not exist" << endl;
             return;
         }
@@ -740,12 +795,16 @@ void BackgroundCommand::execute() {
             jobs->resumesStoppedJob(bg_or_stopped_job, this);
         }
         else { // the process still running in the background
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: bg: job-id " << atoi(args[1])<< " is already running in the background" << endl;
         }
     }
     else { // zero arg
         JobEntry* last_stopped_job = jobs->getLastStoppedJob();
         if (last_stopped_job == NULL) { // there are no stopped jobs in the vec
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             std::cerr << "smash error: bg: there is no stopped jobs to resume" << endl;
             return;
         }
@@ -772,6 +831,8 @@ void QuitCommand::execute() {
 HeadCommand::HeadCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), jobs(jobs) {}
 void HeadCommand::execute() {
     if(args_length < 2) {
+        if(IO_status!=2)
+            ChangeIO(IO_status);
         std::cerr << "smash error: head: not enough arguments" << endl;
         return;
     }
@@ -787,10 +848,14 @@ void HeadCommand::execute() {
             open_fd = open(args[2], O_RDONLY, 0666);
         }
         if (open_fd == -1) {
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             perror("smash error: open failed");
             return;
         }
         if (line_numbers == 0) {
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             return; // stop if we should not print any lines
         }
         int size = 3000;
@@ -800,6 +865,8 @@ void HeadCommand::execute() {
         int round = 1;
         int status = read(open_fd, &buff[i], 1);
         if(status == -1) {
+            if(IO_status!=2)
+                ChangeIO(IO_status);
             perror("smash error: read failed");
         }
         if(buff[i] == '\n') {
@@ -813,6 +880,8 @@ void HeadCommand::execute() {
             }
             status = read(open_fd, &buff[i], 1);
             if(status == -1) {
+                if(IO_status!=2)
+                    ChangeIO(IO_status);
                 perror("smash error: read failed");
                 free(buff);
                 return;
@@ -993,6 +1062,7 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
 void SmallShell::executeCommand(const char *cmd_line) {
     int pipe_status = _isPipeCommand(cmd_line);
     if (pipe_status > 0) { // pipe
+        jobs_list.removeFinishedJobs();
         std::string left;
         std::string right;
         _splitPipeCommands(cmd_line, &left, &right);
@@ -1052,10 +1122,12 @@ void SmallShell::executeCommand(const char *cmd_line) {
                 }
             }
         } else if (pid > 0) { //parent - smash
-            pid_t wait_status = wait(NULL);
-            if (wait_status < 0) {
+            pid_t wait_status1 = wait(NULL);
+            if (wait_status1 < 0) {
                 perror("smash error: wait failed");
             }
+            wait(NULL);
+            wait(NULL);
         } else {
             perror("smash error: fork failed");
         }
@@ -1075,5 +1147,5 @@ void SmallShell::executeCommand(const char *cmd_line) {
             }
         }
     }
-  // Please note that you must fork smash process for some commands (e.g., external commands....)
+    // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
