@@ -314,10 +314,15 @@ void JobsList::removeFinishedJobs() {
                 this->removeJobByProcessId(kidpid);
             }
         }
-
-
-
-
+        vector<JobEntry>::iterator it;
+        for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
+            kidpid = it->getProcessID();
+            if (kidpid == 0)
+                break;
+            if (kill(kidpid, 0) != 0) {
+                this->removeJobByProcessId(kidpid);
+            }
+        }
         // need to do the rows below after every change in the vec
         updateMaxJobID();
         updateMaxStoppedJobID();
