@@ -909,11 +909,12 @@ void HeadCommand::execute() {
 //            for (int j = 0; j < i+1; ++j) {
 //                buff_arr[j] = buff[j];
 //            }
-             string buff_str(buff);
-             string buff_sub_str = buff_str.substr(0,i+1);
-             write(STDOUT_FILENO,buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
-//            write(STDOUT_FILENO,buff_arr, strlen(buff_arr));
-//            std::cout<<buff_arr;
+             buff = (char*)realloc(buff, i+2);
+//             string buff_str(buff);
+//             string buff_sub_str = buff_str.substr(0,i+1);
+//             write(STDOUT_FILENO,buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
+            write(STDOUT_FILENO,buff, strlen(buff));
+//             std::cout<<buff;
 //            free(buff_arr);
         }
         else {
@@ -921,9 +922,11 @@ void HeadCommand::execute() {
 //            for (int j = 0; j < i+1; ++j) {
 //                buff_arr[j] = buff[j];
 //            }
-            string buff_str(buff);
-            string buff_sub_str = buff_str.substr(0,i+1);
-            ChangeIO(IO_status, buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
+//            string buff_str(buff);
+//            string buff_sub_str = buff_str.substr(0,i+1);
+            buff = (char*)realloc(buff, i+2);
+//            ChangeIO(IO_status, buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
+            ChangeIO(IO_status, buff, strlen(buff));
 //            free(buff_arr);
         }
         if(close(open_fd) == -1)
