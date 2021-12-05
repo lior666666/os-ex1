@@ -311,21 +311,18 @@ void JobsList::removeFinishedJobs() {
         while (kidpid > 0) {
             kidpid = waitpid(-1, &status, WNOHANG);
             if (kidpid > 0) {
-                std::cout << " got here!\n";
                 this->removeJobByProcessId(kidpid);
             }
         }
-//        vector<JobEntry>::iterator it;
-//        for (it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
-//            kidpid = it->getProcessID();
-//            if(kidpid == 0)
-//                break;
-//            if(kill(kidpid,0)!=0)
-//            {
-//                this->removeJobByProcessId(kidpid);
-//            }
-//        }
-
+        vector<JobEntry>::iterator it;
+        for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
+            kidpid = it->getProcessID();
+            if (kidpid == 0)
+                break;
+            if (kill(kidpid, 0) != 0) {
+                this->removeJobByProcessId(kidpid);
+            }
+        }
         // need to do the rows below after every change in the vec
         updateMaxJobID();
         updateMaxStoppedJobID();
@@ -722,7 +719,6 @@ void KillCommand::execute() {
                 if(IO_status == 2) {
                     std::cout << "signal number " << abs(atoi(args[1])) << " was sent to pid "
                               << job_to_send_signal->getProcessID() << endl;
-                    jobs->removeFinishedJobs();
                 }
                 else {
                     string buff("signal number ");
@@ -903,23 +899,35 @@ void HeadCommand::execute() {
             }
         }
         if(IO_status == 2) {
-            char* buff_arr = (char*) malloc(i+2);
-            for (int j = 0; j < i+1; ++j) {
-                buff_arr[j] = buff[j];
-            }
-            string buff_str(buff_arr);
-            write(STDOUT_FILENO,buff_str.c_str(), strlen(buff_str.c_str()));
-            free(buff_arr);
+//            for (int j = 0; j < i+1; ++j) {
+//                std::cout << buff[j];
+//            }
+//              string srt(buff);
+//              std::cout<< srt.substr(0, i+1);
+              //write(STDOUT_FILENO,buff, i+1);
+//            char* buff_arr = (char*) malloc(i+1);
+//            for (int j = 0; j < i+1; ++j) {
+//                buff_arr[j] = buff[j];
+//            }
+             string buff_str(buff);
+             string buff_sub_str = buff_str.substr(0,i+1);
+             write(STDOUT_FILENO,buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
+//            write(STDOUT_FILENO,buff_arr, strlen(buff_arr));
+//            std::cout<<buff_arr;
+//            free(buff_arr);
         }
         else {
-            char* buff_arr = (char*) malloc(i+2);
-            for (int j = 0; j < i+1; ++j) {
-                buff_arr[j] = buff[j];
-            }
-            string buff_str(buff_arr);
-            ChangeIO(IO_status, buff_str.c_str(), strlen(buff_str.c_str()));
-            free(buff_arr);
+//            char* buff_arr = (char*) malloc(i+2);
+//            for (int j = 0; j < i+1; ++j) {
+//                buff_arr[j] = buff[j];
+//            }
+            string buff_str(buff);
+            string buff_sub_str = buff_str.substr(0,i+1);
+            ChangeIO(IO_status, buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
+//            free(buff_arr);
         }
+        if(close(open_fd) == -1)
+            perror("smash error: close failed");
         free(buff);
     }
 }
