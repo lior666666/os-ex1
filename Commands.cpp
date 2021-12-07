@@ -942,7 +942,9 @@ void HeadCommand::execute() {
 
 // <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_process_id(getpid()), smash_pid(getpid()) {}
-SmallShell::~SmallShell() {}
+SmallShell::~SmallShell(){
+  //  free(last_pwd);
+}
 const char* SmallShell::getPrompt(){
     return this->prompt;
 }
@@ -1052,8 +1054,11 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
             setpgrp();
             if (_isTimeCommand(cmd_line)) {
                 char* tmp_args[COMMAND_MAX_ARGS];
-                _parseCommandLine(cmd_line,tmp_args);
+                int args_length = _parseCommandLine(cmd_line,tmp_args);
                 std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
+                for(int i = 0; i < args_length; i++) {
+                    free(tmp_args[i]);
+                }
                 return new ExternalCommand(new_cmd_line.c_str(), &jobs_list);
             }
             return new ExternalCommand(cmd_line, &jobs_list);
@@ -1074,10 +1079,13 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
                 jobs_list.addJob(-1, cmd_line, pid, false);
                 if (_isTimeCommand(cmd_line)) {
                     char* tmp_args[COMMAND_MAX_ARGS];
-                    _parseCommandLine(cmd_line,tmp_args);
+                    int args_length = _parseCommandLine(cmd_line,tmp_args);
                     JobEntry* job = new JobEntry(-1, strdup(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
                     time_jobs_vec.push_back(*job);
                     alarm(findMinAlarm());
+                    for(int i = 0; i < args_length; i++) {
+                        free(tmp_args[i]);
+                    }
                 }
             }
         } else {
@@ -1163,10 +1171,14 @@ void SmallShell::executeCommand(const char *cmd_line) {
     else {
         if (_isTimeCommand(cmd_line) && !_isBackgroundComamnd(cmd_line)) {
             char *tmp_args[COMMAND_MAX_ARGS];
-            _parseCommandLine(cmd_line, tmp_args);
+            int args_length = _parseCommandLine(cmd_line, tmp_args);
             std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
             alarm(atoi(tmp_args[1]));
-            last_cmd = new_cmd_line;
+            string last_cmd_str(cmd_line);
+            last_cmd = last_cmd_str;
+            for(int i = 0; i < args_length; i++) {
+                free(tmp_args[i]);
+            }
             executeCommand(new_cmd_line.c_str());
         } else {
             Command *cmd = CreateCommand(cmd_line);
