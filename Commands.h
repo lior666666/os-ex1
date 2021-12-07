@@ -41,6 +41,7 @@ public:
     void removeFinishedJobs();
     void updateMaxJobID();
     void updateMaxStoppedJobID();
+    std::vector<JobEntry>* getJobsVec();
     JobEntry* getJobById(int jobId);
     JobEntry* getJobByProcessId(pid_t process_id);
     void removeJobByProcessId(pid_t process_to_delete);
@@ -192,7 +193,7 @@ class SmallShell {
 private:
     JobsList jobs_list;
     std::vector<JobEntry> time_jobs_vec;
-    const char* prompt;
+    std::string prompt;
     char* last_pwd;
     bool lastPwdInitialized;
     int curr_job_id;
@@ -215,7 +216,7 @@ public:
     int findMinAlarm();
     std::vector<JobEntry>* getTimeJobVec();
     bool isLastPwdInitialized();
-    void setPrompt(const char* prompt);
+    void setPrompt(std::string prompt);
     void setLastPwd(const char* last_pwd);
     void setCurrJobID(int job_id);
     void setCurrProcessID(int pid);

@@ -57,9 +57,13 @@ int _parseCommandLine(const char* cmd_line, char** args) {
 
 bool _isTimeCommand(const char* cmd_line){
     char* tmp_args[COMMAND_MAX_ARGS];
-    _parseCommandLine(cmd_line, tmp_args);
+    int arr_length = _parseCommandLine(cmd_line, tmp_args);
     std::string str(tmp_args[0]);
-    return (strcmp("timeout",str.c_str()) == 0);
+    bool check = (strcmp("timeout",str.c_str()) == 0);
+    for(int i = 0; i < arr_length; i++) {
+        free(tmp_args[i]);
+    }
+    return check;
 }
 
 int _isPipeCommand(const char* cmd_line) {
@@ -348,6 +352,9 @@ void JobsList::updateMaxStoppedJobID() {
         max_stopped_jod_id = 0;
     }
 }
+std::vector<JobEntry>* JobsList::getJobsVec() {
+    return this->jobs_vec;
+}
 JobEntry* JobsList::getJobById(int jobId) {
     vector<JobEntry>::iterator it;
     for(it = jobs_vec->begin(); it != jobs_vec->end(); it++)
@@ -518,7 +525,8 @@ Command::Command(const char* cmd_line) : cmd_line(cmd_line) {
 }
 Command::~Command() {
     for(int i = 0; i < this->args_length; i++) {
-        free(this->args[i]);
+        if (this->args[i] != NULL)
+            free(this->args[i]);
     }
     free(this->cmd_line_without_const);
 }
@@ -659,7 +667,9 @@ void ChangeDirCommand::execute(){
             else{
                 char* copy_last_pwd = (char*)malloc(strlen(smash->getLastPwd()) + 1);
                 strcpy(copy_last_pwd, smash->getLastPwd());
-                smash->setLastPwd(getcwd(NULL, 0));
+                char* curr_dir = getcwd(NULL, 0);
+                smash->setLastPwd(curr_dir);
+                free(curr_dir);
                 if(chdir(copy_last_pwd) == -1){
                     perror("smash error: chdir failed");
                     smash->setLastPwd(copy_last_pwd);
@@ -673,7 +683,9 @@ void ChangeDirCommand::execute(){
                 copy_last_pwd = (char *) malloc(strlen(smash->getLastPwd()) + 1);
                 strcpy(copy_last_pwd, smash->getLastPwd());
             }
-            smash->setLastPwd(getcwd(NULL, 0));
+            char* curr_dir = getcwd(NULL, 0);
+            smash->setLastPwd(curr_dir);
+            free(curr_dir);
             if (chdir(args[1]) == -1){
                 perror("smash error: chdir failed");
                 smash->setLastPwd(copy_last_pwd);
@@ -828,6 +840,7 @@ void QuitCommand::execute() {
     if (args[1] != NULL && strcmp(args[1], sign) == 0) {
         jobs->killAllJobs(this);
     }
+    delete this;
     exit(0);
 }
 // <---------- END QuitCommand ------------>
@@ -899,19 +912,38 @@ void HeadCommand::execute() {
             }
         }
         if(IO_status == 2) {
-            for (int j = 0; j < i+1; ++j) {
-                std::cout << buff[j];
-            }
+//            for (int j = 0; j < i+1; ++j) {
+//                std::cout << buff[j];
+//            }
+//              string srt(buff);
+//              std::cout<< srt.substr(0, i+1);
+            //write(STDOUT_FILENO,buff, i+1);
+//            char* buff_arr = (char*) malloc(i+1);
+//            for (int j = 0; j < i+1; ++j) {
+//                buff_arr[j] = buff[j];
+//            }
+            buff = (char*)realloc(buff, i+2);
+//             string buff_str(buff);
+//             string buff_sub_str = buff_str.substr(0,i+1);
+//             write(STDOUT_FILENO,buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
+            write(STDOUT_FILENO,buff, strlen(buff));
+//             std::cout<<buff;
+//            free(buff_arr);
         }
         else {
-            char* buff_arr = (char*) malloc(i+2);
-            for (int j = 0; j < i+1; ++j) {
-                buff_arr[j] = buff[j];
-            }
-            string buff_str(buff_arr);
-            ChangeIO(IO_status, buff_str.c_str(), strlen(buff_str.c_str()));
-            free(buff_arr);
+//            char* buff_arr = (char*) malloc(i+2);
+//            for (int j = 0; j < i+1; ++j) {
+//                buff_arr[j] = buff[j];
+//            }
+//            string buff_str(buff);
+//            string buff_sub_str = buff_str.substr(0,i+1);
+            buff = (char*)realloc(buff, i+2);
+//            ChangeIO(IO_status, buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
+            ChangeIO(IO_status, buff, strlen(buff));
+//            free(buff_arr);
         }
+        if(close(open_fd) == -1)
+            perror("smash error: close failed");
         free(buff);
     }
 }
@@ -919,11 +951,18 @@ void HeadCommand::execute() {
 
 // <---------- START SmallShell ------------>
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_process_id(getpid()), smash_pid(getpid()) {}
-SmallShell::~SmallShell() {}
-const char* SmallShell::getPrompt(){
-    return this->prompt;
+SmallShell::~SmallShell(){
+    free(last_pwd);
+    vector<JobEntry>::iterator it;
+    std::vector<JobEntry>* vec = jobs_list.getJobsVec();
+    for(it = vec->begin(); it != vec->end(); it++) {
+        vec->erase(it);
+    }
 }
-void SmallShell::setPrompt(const char* prompt){
+const char* SmallShell::getPrompt(){
+    return prompt.c_str();
+}
+void SmallShell::setPrompt(std::string prompt){
     this->prompt = prompt;
 }
 std::vector<JobEntry>* SmallShell::getTimeJobVec(){
@@ -952,7 +991,10 @@ const char* SmallShell::getLastCmd(){
 }
 void SmallShell::setLastPwd(const char* update_last_pwd) {
     free(this->last_pwd);
-    this->last_pwd = strdup(update_last_pwd);
+    if (update_last_pwd)
+        this->last_pwd = strdup(update_last_pwd);
+    else
+        this->last_pwd = NULL;
 }
 void SmallShell::setCurrJobID(int job_id) {
     this->curr_job_id = job_id;
@@ -1029,8 +1071,11 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
             setpgrp();
             if (_isTimeCommand(cmd_line)) {
                 char* tmp_args[COMMAND_MAX_ARGS];
-                _parseCommandLine(cmd_line,tmp_args);
+                int args_length = _parseCommandLine(cmd_line,tmp_args);
                 std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
+                for(int i = 0; i < args_length; i++) {
+                    free(tmp_args[i]);
+                }
                 return new ExternalCommand(new_cmd_line.c_str(), &jobs_list);
             }
             return new ExternalCommand(cmd_line, &jobs_list);
@@ -1051,10 +1096,13 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
                 jobs_list.addJob(-1, cmd_line, pid, false);
                 if (_isTimeCommand(cmd_line)) {
                     char* tmp_args[COMMAND_MAX_ARGS];
-                    _parseCommandLine(cmd_line,tmp_args);
+                    int args_length = _parseCommandLine(cmd_line,tmp_args);
                     JobEntry* job = new JobEntry(-1, strdup(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
                     time_jobs_vec.push_back(*job);
                     alarm(findMinAlarm());
+                    for(int i = 0; i < args_length; i++) {
+                        free(tmp_args[i]);
+                    }
                 }
             }
         } else {
@@ -1140,15 +1188,20 @@ void SmallShell::executeCommand(const char *cmd_line) {
     else {
         if (_isTimeCommand(cmd_line) && !_isBackgroundComamnd(cmd_line)) {
             char *tmp_args[COMMAND_MAX_ARGS];
-            _parseCommandLine(cmd_line, tmp_args);
+            int args_length = _parseCommandLine(cmd_line, tmp_args);
             std::string new_cmd_line = removeTimeOut(cmd_line, tmp_args[1]);
             alarm(atoi(tmp_args[1]));
-            last_cmd = new_cmd_line;
+            string last_cmd_str(cmd_line);
+            last_cmd = last_cmd_str;
+            for(int i = 0; i < args_length; i++) {
+                free(tmp_args[i]);
+            }
             executeCommand(new_cmd_line.c_str());
         } else {
             Command *cmd = CreateCommand(cmd_line);
             if (cmd != NULL) {
                 cmd->execute();
+                delete cmd;
             }
         }
     }
