@@ -57,9 +57,13 @@ int _parseCommandLine(const char* cmd_line, char** args) {
 
 bool _isTimeCommand(const char* cmd_line){
     char* tmp_args[COMMAND_MAX_ARGS];
-    _parseCommandLine(cmd_line, tmp_args);
+    int arr_length = _parseCommandLine(cmd_line, tmp_args);
     std::string str(tmp_args[0]);
-    return (strcmp("timeout",str.c_str()) == 0);
+    bool check = (strcmp("timeout",str.c_str()) == 0);
+    for(int i = 0; i < arr_length; i++) {
+        free(tmp_args[i]);
+    }
+    return check;
 }
 
 int _isPipeCommand(const char* cmd_line) {
