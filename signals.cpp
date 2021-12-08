@@ -14,7 +14,7 @@ void ctrlZHandler(int sig_num) {
         //add to vec
         JobsList* vec = smash.getJobsList();
         vec->removeFinishedJobs();
-        vec->addJob(smash.getCurrJobID(), smash.getCurrCmdLine(), smash.getCurrProcessID(), true);
+        vec->addJob(smash.getCurrJobID(), (smash.getCurrCmdLine()).c_str(), smash.getCurrProcessID(), true);
         vec->updateMaxJobID();
         vec->updateMaxStoppedJobID();
         if (kill(smash.getCurrProcessID(), SIGSTOP) == -1) {

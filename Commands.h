@@ -11,13 +11,13 @@ class Command;
 class SmallShell;
 class JobEntry {
     int job_id;
-    char* cmd_line;
+    std::string cmd_line;
     pid_t process_id;
     time_t time_inserted;
     bool isStopped;
     int time_up;
 public:
-    JobEntry(int job_id, char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped, int time_up);
+    JobEntry(int job_id, std::string cmd_line, pid_t process_id, time_t time_inserted, bool isStopped, int time_up);
     ~JobEntry();
     void printJob(Command* cmd, int IO_status);
     int getJobID();
@@ -26,7 +26,7 @@ public:
     int getTimeUp();
     bool isStoppedProcess();
     void setIsStopped(bool setStopped);
-    char* getCmdLine();
+    std::string getCmdLine();
 };
 
 class JobsList {
@@ -198,7 +198,7 @@ private:
     bool lastPwdInitialized;
     int curr_job_id;
     std::string last_cmd;
-    const char* curr_cmd_line;
+    std::string curr_cmd_line;
     pid_t curr_process_id;
     pid_t smash_pid;
     SmallShell();
@@ -212,7 +212,7 @@ public:
     int getCurrJobID();
     int getCurrProcessID();
     int getSmashPid();
-    const char* getCurrCmdLine();
+    std::string getCurrCmdLine();
     int findMinAlarm();
     std::vector<JobEntry>* getTimeJobVec();
     bool isLastPwdInitialized();
@@ -220,7 +220,7 @@ public:
     void setLastPwd(const char* last_pwd);
     void setCurrJobID(int job_id);
     void setCurrProcessID(int pid);
-    void setCurrCmdLine(const char* cmd_line);
+    void setCurrCmdLine(std::string cmd_line);
     void changeLastPwdStatus();
     SmallShell(SmallShell const&)      = delete; // disable copy ctor
     void operator=(SmallShell const&)  = delete; // disable = operator
