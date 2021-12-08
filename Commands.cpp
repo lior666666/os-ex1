@@ -256,15 +256,10 @@ JobsList::JobsList() {
     max_stopped_jod_id = 0;
 }
 JobsList::~JobsList() {
-    vector<JobEntry>::iterator it;
-    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
-        delete &(*it);
-    }
-    //std::cout << "666666" << endl;
+    jobs_vec->clear();
     delete jobs_vec;
 }
 void JobsList::addJob(int job_id, const char* cmd_line, pid_t pid, bool isStopped) {
-    JobEntry* job;
     int effective_job_id;
     if (job_id == -1) { // new job (not return from fg)
         effective_job_id = max_job_id + 1;
@@ -272,21 +267,21 @@ void JobsList::addJob(int job_id, const char* cmd_line, pid_t pid, bool isStoppe
     else {
         effective_job_id = job_id;
     }
-    job = new JobEntry(effective_job_id, std::string(cmd_line), pid, time(NULL), isStopped, -1);
+    JobEntry job(effective_job_id, std::string(cmd_line), pid, time(NULL), isStopped, -1);
     vector<JobEntry>::iterator it;
     if (jobs_vec->size() == 0) {
-        jobs_vec->push_back(*job);
+        jobs_vec->push_back(job);
     }
     else if (jobs_vec->front().getJobID() > effective_job_id) {
-        jobs_vec->insert(jobs_vec->begin(), *job);
+        jobs_vec->insert(jobs_vec->begin(), job);
     }
     else if (jobs_vec->back().getJobID() < effective_job_id) {
-        jobs_vec->insert(jobs_vec->end(), *job);
+        jobs_vec->insert(jobs_vec->end(), job);
     }
     else {
         for (it = jobs_vec->begin() + 1; it != jobs_vec->end(); it++) {
             if ((it - 1)->getJobID() < effective_job_id && it->getJobID() > effective_job_id) {
-                jobs_vec->insert(it, *job);
+                jobs_vec->insert(it, job);
             }
         }
     }
@@ -1074,8 +1069,8 @@ Command * SmallShell::CreateCommand(const char* cmd_line) {
                 if (_isTimeCommand(cmd_line)) {
                     char* tmp_args[COMMAND_MAX_ARGS];
                     int args_length = _parseCommandLine(cmd_line,tmp_args);
-                    JobEntry* job = new JobEntry(-1, strdup(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
-                    time_jobs_vec.push_back(*job);
+                    JobEntry job(-1, std::string(cmd_line), pid, time(NULL), false, atoi(tmp_args[1]));
+                    time_jobs_vec.push_back(job);
                     alarm(findMinAlarm());
                     for(int i = 0; i < args_length; i++) {
                         free(tmp_args[i]);
