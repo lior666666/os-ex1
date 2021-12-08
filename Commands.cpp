@@ -181,9 +181,11 @@ void _removeBackgroundSign(char* cmd_line) {
 }
 
 // <---------- START JobEntry ------------>
-JobEntry::JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped, int time_up) :
+JobEntry::JobEntry(int job_id, char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped, int time_up) :
         job_id(job_id), cmd_line(cmd_line), process_id(process_id), time_inserted(time_inserted), isStopped(isStopped),time_up(time_up) {}
-JobEntry::~JobEntry() {}
+JobEntry::~JobEntry() {
+    free(cmd_line);
+}
 void JobEntry::printJob(Command* cmd, int IO_status) {
     if(IO_status == 2) {
         if (this->isStopped) {
@@ -241,7 +243,7 @@ bool JobEntry::isStoppedProcess() {
 time_t JobEntry::getTImeInserted(){
     return this->time_inserted;
 }
-const char* JobEntry::getCmdLine() {
+char* JobEntry::getCmdLine() {
     return this->cmd_line;
 }
 void JobEntry::setIsStopped(bool setStopped) {
@@ -256,6 +258,11 @@ JobsList::JobsList() {
     max_stopped_jod_id = 0;
 }
 JobsList::~JobsList() {
+//    vector<JobEntry>::iterator it;
+//    for(it = jobs_vec->begin(); it != jobs_vec->end(); it++) {
+//        jobs_vec->erase(it);
+//    }
+    //std::cout << "666666" << endl;
     delete jobs_vec;
 }
 void JobsList::addJob(int job_id, const char* cmd_line, pid_t pid, bool isStopped) {
@@ -840,7 +847,7 @@ void QuitCommand::execute() {
     if (args[1] != NULL && strcmp(args[1], sign) == 0) {
         jobs->killAllJobs(this);
     }
-    delete this;
+    delete this; //delete command
     exit(0);
 }
 // <---------- END QuitCommand ------------>
@@ -912,35 +919,12 @@ void HeadCommand::execute() {
             }
         }
         if(IO_status == 2) {
-//            for (int j = 0; j < i+1; ++j) {
-//                std::cout << buff[j];
-//            }
-//              string srt(buff);
-//              std::cout<< srt.substr(0, i+1);
-            //write(STDOUT_FILENO,buff, i+1);
-//            char* buff_arr = (char*) malloc(i+1);
-//            for (int j = 0; j < i+1; ++j) {
-//                buff_arr[j] = buff[j];
-//            }
             buff = (char*)realloc(buff, i+2);
-//             string buff_str(buff);
-//             string buff_sub_str = buff_str.substr(0,i+1);
-//             write(STDOUT_FILENO,buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
             write(STDOUT_FILENO,buff, strlen(buff));
-//             std::cout<<buff;
-//            free(buff_arr);
         }
         else {
-//            char* buff_arr = (char*) malloc(i+2);
-//            for (int j = 0; j < i+1; ++j) {
-//                buff_arr[j] = buff[j];
-//            }
-//            string buff_str(buff);
-//            string buff_sub_str = buff_str.substr(0,i+1);
             buff = (char*)realloc(buff, i+2);
-//            ChangeIO(IO_status, buff_sub_str.c_str(), strlen(buff_sub_str.c_str()));
             ChangeIO(IO_status, buff, strlen(buff));
-//            free(buff_arr);
         }
         if(close(open_fd) == -1)
             perror("smash error: close failed");
@@ -953,11 +937,6 @@ void HeadCommand::execute() {
 SmallShell::SmallShell() : prompt("smash"), last_pwd(NULL), lastPwdInitialized(false), curr_process_id(getpid()), smash_pid(getpid()) {}
 SmallShell::~SmallShell(){
     free(last_pwd);
-    vector<JobEntry>::iterator it;
-    std::vector<JobEntry>* vec = jobs_list.getJobsVec();
-    for(it = vec->begin(); it != vec->end(); it++) {
-        vec->erase(it);
-    }
 }
 const char* SmallShell::getPrompt(){
     return prompt.c_str();

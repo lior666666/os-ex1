@@ -11,13 +11,13 @@ class Command;
 class SmallShell;
 class JobEntry {
     int job_id;
-    const char* cmd_line;
+    char* cmd_line;
     pid_t process_id;
     time_t time_inserted;
     bool isStopped;
     int time_up;
 public:
-    JobEntry(int job_id, const char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped, int time_up);
+    JobEntry(int job_id, char* cmd_line, pid_t process_id, time_t time_inserted, bool isStopped, int time_up);
     ~JobEntry();
     void printJob(Command* cmd, int IO_status);
     int getJobID();
@@ -26,7 +26,7 @@ public:
     int getTimeUp();
     bool isStoppedProcess();
     void setIsStopped(bool setStopped);
-    const char* getCmdLine();
+    char* getCmdLine();
 };
 
 class JobsList {
